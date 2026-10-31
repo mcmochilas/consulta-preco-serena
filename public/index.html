@@ -580,6 +580,7 @@ const statusOf = v => !v.ean ? "Sem EAN" : !v.imagens ? "Sem imagem" : v.total =
 const TAG = { "Ok":"tag-ok", "Sem EAN":"tag-warn", "Sem imagem":"tag-acc", "Sem estoque":"tag-off" };
 
 async function renderAdmin(){
+  const topo = !document.querySelector(".ad");
   const prods = await api.produtos();
   const cons = api.consultas(), resolv = api.resolvidos();
   const pend = prods.filter(v => !v.ean || !v.imagens).length;
@@ -602,6 +603,7 @@ async function renderAdmin(){
     </nav>
     <main id="adMain">${tab === "integ" ? admInteg(prods, pend, sync) : tab === "prod" ? admProd(prods) : tab === "pre" ? admPre() : tab === "vend" ? admVend(cons) : admCons(cons, nfs, prods)}</main>
   </div>`;
+  if(topo) window.scrollTo(0, 0);
 }
 
 const APG = 10;
@@ -1606,6 +1608,11 @@ window.addEventListener("cp-pre-mudou", ev => {
 });
 
 /* ---------- início ---------- */
+try{ history.scrollRestoration = "manual"; }catch(e){}
+window.scrollTo(0, 0);
+// se algo der errado ao desenhar a tela, mostra o motivo em vez de deixar a página em branco
+window.addEventListener("error", e => { try{ toast("Erro na tela: " + (e.message || e.error)); }catch(x){} });
+window.addEventListener("unhandledrejection", e => { try{ toast("Erro: " + ((e.reason && e.reason.message) || e.reason)); }catch(x){} });
 $("#app").innerHTML = `<div class="lg"><img src="${LOGO.escuro}" alt="Serena Puxadores" style="width:200px;opacity:.9"></div>`;
 api.init().then(async () => {
   if(!api.me()){ try{ S.semAdmin = !(await api.temAdmin()); }catch(e){ S.semAdmin = false; } }
