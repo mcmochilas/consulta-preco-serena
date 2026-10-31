@@ -194,8 +194,8 @@ body.dragging{cursor:grabbing}
 .acts .btn{flex:1 1 200px}
 
 /* ---------- admin ---------- */
-.ad{display:flex;flex-wrap:wrap;min-height:100vh}
-.ad nav{flex:1 1 220px;max-width:100%;background:var(--petrol-d);color:#F7F4EF;padding:24px 16px;display:flex;flex-direction:column;gap:22px}
+.ad{display:flex;min-height:100vh}
+.ad nav{flex:0 0 260px;width:260px;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--petrol-d);color:#F7F4EF;padding:24px 16px;display:flex;flex-direction:column;gap:22px}
 .ad nav .brand b{font-family:var(--display);font-size:20px;display:block}
 .ad nav .brand small{font-size:12px;color:#B7CAD4}
 .navb{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:0 12px;border-radius:10px;border:0;background:transparent;color:#E3ECF0;text-align:left;font-size:14px;font-weight:600}
@@ -205,7 +205,8 @@ body.dragging{cursor:grabbing}
 .navstat{padding:12px;border-radius:12px;background:#164C64;display:flex;flex-direction:column;gap:4px;font-size:12px;color:#B7CAD4}
 .navstat b{color:#F7F4EF;font-size:13px;display:flex;align-items:center;gap:8px}
 .navlink{border:1px solid #3C6E86;background:transparent;color:#F7F4EF;border-radius:10px;min-height:42px;font-size:13px;font-weight:700}
-.ad main{flex:999 1 560px;min-width:0;padding:32px 32px 48px;display:flex;flex-direction:column;gap:22px;max-width:1240px}
+.ad main{flex:1 1 0;min-width:0;padding:32px 32px 48px;display:flex;flex-direction:column;gap:22px;max-width:1400px}
+@media (max-width:760px){.ad{flex-direction:column}.ad nav{flex:none;width:auto;height:auto;position:static}}
 @media (max-width:640px){.ad main{padding:20px 14px 40px}}
 .hdr{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
 .hdr h1{margin:0;font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:-.02em}
@@ -594,7 +595,7 @@ async function renderAdmin(){
           return `<button class="navb" data-act="tab" data-t="${k}" aria-current="${tab === k ? "page" : "false"}"><span>${l}</span>${b ? `<span class="badge">${b}</span>` : ""}</button>`; }).join("")}
       </div>
       <div class="navfoot">
-        <div class="navstat"><b><span class="dot" style="background:#7FB0F0"></span>Magazord ${api.config().api.ok ? "conectada" : "(teste)"}</b>Última sincronização ${rel(sync.last)}</div>
+        <div class="navstat"><b><span class="dot" style="background:#7FB0F0"></span>Magazord ${api.config().api.ok ? "conectada" : "não configurada"}</b>${sync.last ? "Última sincronização " + rel(sync.last) : "Nenhuma sincronização ainda"}</div>
         <button class="navlink" data-act="to-vendedor">Abrir app do vendedor</button>
         <button class="navlink" data-act="logout">Sair</button>
       </div>
@@ -621,7 +622,7 @@ function admInteg(prods, pend, sync){
       <button class="btn btn-dark" data-act="sync" ${A.syncing ? "disabled" : ""}>${A.syncing ? "Sincronizando…" : "Sincronizar agora"}</button>
     </header>
     <div class="stats">
-      <div class="stat"><span class="muted">Última sincronização</span><b>${rel(sync.last)}</b></div>
+      <div class="stat"><span class="muted">Última sincronização</span><b>${sync.last ? rel(sync.last) : "—"}</b></div>
       <div class="stat"><span class="muted">Modelos ativos</span><b>${modelos}</b></div>
       <div class="stat"><span class="muted">Variações</span><b>${prods.length}</b></div>
       <div class="stat"><span class="muted">Pendências de cadastro</span><b style="color:var(--warn)">${pend}</b></div>
