@@ -86,7 +86,7 @@
     ];
     if(adm) jobs.push(
       sb.from("profiles").select("*").order("name").then(ok).then(rows => { C.perfis.clear(); rows.forEach(x => C.perfis.set(x.id, x)); }),
-      sb.from("consultas").select("at,user_id,ean,var_id,preco").order("at", { ascending:false }).limit(1000).then(ok).then(rows => { C.consultas = rows.map(x => ({ at:ms(x.at), user:x.user_id, ean:x.ean, varId:x.var_id, preco:x.preco == null ? null : Number(x.preco) })); }),
+      sb.from("consultas").select("at,user_id,ean,var_id,preco,estoque").order("at", { ascending:false }).limit(1000).then(ok).then(rows => { C.consultas = rows.map(x => ({ at:ms(x.at), user:x.user_id, ean:x.ean, varId:x.var_id, preco:x.preco == null ? null : Number(x.preco), estoque:x.estoque == null ? null : Number(x.estoque) })); }),
       sb.from("sync_log").select("*").order("at", { ascending:false }).limit(60).then(ok).then(rows => { C.hist = rows.map(x => ({ at:ms(x.at), origem:x.origem, itens:x.itens, res:x.res })); }),
       fn("magazord", { action:"status" }).then(s => { C.mz = { ...C.mz, ...s }; }).catch(() => {})
     );
@@ -165,7 +165,7 @@
       let r = (ok(await sb.from("variacoes").select("*").in("ean", cands).eq("ativo", true).limit(1)) || [])[0];
       if(!r && C.aliases[ean]) r = ok(await sb.from("variacoes").select("*").eq("id", C.aliases[ean]).maybeSingle());
       if(!r){ const a = ok(await sb.from("aliases").select("var_id").eq("ean", ean).maybeSingle()); if(a) r = ok(await sb.from("variacoes").select("*").eq("id", a.var_id).maybeSingle()); }
-      sb.from("consultas").insert({ user_id:C.me.id, ean, var_id:r ? r.id : null, preco:r ? r.preco : null }).then(() => {});
+      sb.from("consultas").insert({ user_id:C.me.id, ean, var_id:r ? r.id : null, preco:r ? r.preco : null, estoque:r ? Math.max(0, Number(r.estoque) || 0) : null }).then(() => {});
       if(!r) return null;
       return view(r, tamsDe(await irmaosDe(r)));
     },

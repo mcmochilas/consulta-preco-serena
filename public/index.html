@@ -862,9 +862,9 @@ function admCons(cons, nfs, prods){
     </div>
     <section class="box" style="padding:20px 0 8px"><h2 style="padding:0 20px">Leituras recentes</h2>
       <div style="overflow-x:auto"><table class="t">
-        <thead><tr><th>Quando</th><th>Vendedor</th><th>EAN lido</th><th>Produto</th><th class="r">Preço mostrado</th></tr></thead>
+        <thead><tr><th>Quando</th><th>Vendedor</th><th>EAN lido</th><th>Produto</th><th class="r">Preço mostrado</th><th class="r">Estoque mostrado</th></tr></thead>
         <tbody>${pL.items.map(c => { const v = c.varId && byId[c.varId];
-          return `<tr><td>${quando(c.at)}</td><td>${esc(users[c.user] || "—")}</td><td class="mono">${esc(c.ean)}</td><td style="${v ? "" : "color:var(--warn);font-weight:600"}">${v ? esc(nome(v)) : "Não encontrado"}</td><td class="r" style="font-weight:600">${v ? brl(c.preco) : "—"}</td></tr>`; }).join("")}</tbody>
+          return `<tr><td>${quando(c.at)}</td><td>${esc(users[c.user] || "—")}</td><td class="mono">${esc(c.ean)}</td><td style="${v ? "" : "color:var(--warn);font-weight:600"}">${v ? esc(nome(v)) : "Não encontrado"}</td><td class="r" style="font-weight:600">${v ? brl(c.preco) : "—"}</td><td class="r">${c.estoque == null ? "—" : c.estoque}</td></tr>`; }).join("")}</tbody>
       </table></div>
       ${pL.html.replace('class="apag"', 'class="apag" style="padding:8px 20px 4px"')}
     </section>`;
