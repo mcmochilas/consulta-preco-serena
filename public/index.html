@@ -53,7 +53,15 @@ button{cursor:pointer}
 .vtop b{font-family:var(--display);font-size:18px;letter-spacing:-.01em;display:block}
 .vtop small{font-size:12px;color:#B7CAD4}
 .chip{font-size:12px;font-weight:700;padding:6px 10px;border-radius:999px;white-space:nowrap}
-.scan-btn{position:relative;width:100%;aspect-ratio:6/5;max-height:340px;border-radius:22px;border:0;background:#134761;color:#F7F4EF;overflow:hidden;display:block;padding:0}
+.scan-btn{position:relative;width:100%;aspect-ratio:6/5;max-height:340px;border-radius:22px;border:0;background:#134761;color:#F7F4EF;overflow:hidden;display:block;padding:0;cursor:pointer}
+.scan-btn video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+.scan-btn.on video{display:block}
+.scan-btn.on::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,0) 55%,rgba(0,0,0,.55));pointer-events:none}
+.scan-btn.on .scan-frame{z-index:1;left:10%;right:10%;top:28%;bottom:30%}
+.scan-btn.on .scan-txt{z-index:2}
+.scan-btn.ok .scan-frame i{border-color:#7CD39A}
+.scan-tools{position:absolute;z-index:3;top:10px;right:10px;display:flex;gap:8px}
+.scan-tools button{height:34px;border-radius:17px;border:0;background:rgba(0,0,0,.45);color:#F7F4EF;font:inherit;font-size:13px;font-weight:600;padding:0 12px}
 .scan-frame{position:absolute;left:16%;right:16%;top:22%;bottom:30%}
 .scan-frame i{position:absolute;width:30px;height:30px;border:3px solid #F7F4EF}
 .scan-frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
@@ -258,25 +266,6 @@ body.dragging{cursor:grabbing}
 .lab svg{width:100%;height:100%;display:block}
 @media (max-width:640px){#toast{bottom:auto!important;top:72px}}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:var(--petrol-d);color:#F7F4EF;padding:12px 18px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
-/* câmera ao vivo */
-.live{position:fixed;inset:0;z-index:90;background:#000;display:flex;flex-direction:column;color:#F7F4EF}
-.live video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.live .lv-top,.live .lv-bot{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:14px 16px;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
-.live .lv-bot{margin-top:auto;flex-direction:column;align-items:stretch;padding:16px 16px 28px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.65))}
-.live .lv-box{position:absolute;z-index:1;left:50%;top:44%;transform:translate(-50%,-50%);width:min(82vw,380px);height:min(36vw,170px);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
-.live .lv-box i{position:absolute;width:26px;height:26px;border:3px solid #FFD195}
-.live .lv-box i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-top-left-radius:16px}
-.live .lv-box i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-top-right-radius:16px}
-.live .lv-box i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-bottom-left-radius:16px}
-.live .lv-box i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-bottom-right-radius:16px}
-.live .lv-box .ln{position:absolute;left:10px;right:10px;top:50%;height:2px;background:#FFD195;opacity:.85;animation:lvln 1.6s ease-in-out infinite alternate}
-@keyframes lvln{from{transform:translateY(-60px)}to{transform:translateY(60px)}}
-@media (prefers-reduced-motion:reduce){.live .lv-box .ln{animation:none}}
-.live.ok .lv-box i{border-color:#7CD39A}
-.live .lv-msg{font-size:15px;font-weight:600;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.6)}
-.live .lv-btn{height:44px;border-radius:12px;border:1px solid rgba(247,244,239,.5);background:rgba(15,58,78,.55);color:#F7F4EF;font:inherit;font-weight:600;font-size:15px;padding:0 16px}
-.live [hidden]{display:none!important}
-.live .lv-ic{width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#F7F4EF;display:grid;place-items:center;font-size:22px}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -413,10 +402,12 @@ function renderVendedor(){
     </div>
     <div style="padding:6px 16px 0;display:flex;flex-direction:column;gap:14px">
       ${activeStrip()}
-      <button class="scan-btn" data-act="camera" aria-label="Ler código de barras com a câmera">
+      <div class="scan-btn${CAM.stream ? " on" : ""}" id="scanBox" data-act="camera" role="button" tabindex="0" aria-label="Leitor de código de barras pela câmera">
+        <video id="scanVideo" playsinline muted autoplay></video>
         <div class="scan-frame"><i></i><i></i><i></i><i></i><div class="scan-line"></div></div>
-        <span class="scan-txt">Toque para abrir a câmera e apontar para o código<span class="scan-sub">Leitor Bluetooth: só bipar, o código cai no campo abaixo</span></span>
-      </button>
+        <div class="scan-tools"><button type="button" data-act="cam-luz" id="camLuz" hidden aria-label="Lanterna">💡 Luz</button><button type="button" data-act="cam-foto" aria-label="Tirar foto da etiqueta">📷 Foto</button></div>
+        <span class="scan-txt" id="scanTxt">${CAM.stream ? "Aponte para o código de barras" : CAM.erro ? esc(CAM.erro) : "Toque para ligar a câmera"}<span class="scan-sub">Leitor Bluetooth: só bipar, o código cai no campo abaixo</span></span>
+      </div>
       <input type="file" id="camFile" accept="image/*" capture="environment" hidden>
       <form id="eanForm" style="display:flex;flex-direction:column;gap:6px;margin:0">
         <label for="eanIn" style="font-size:12px;color:#B7CAD4;font-weight:600">Ou digite o código</label>
@@ -441,10 +432,11 @@ function renderVendedor(){
   if(matchMedia("(pointer:fine)").matches) inp.focus();
   $("#eanForm").onsubmit = e => { e.preventDefault(); buscar(inp.value); };
   $("#camFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) lerFoto(f); };
+  cameraNaTela();
 }
 
-/* ---------- câmera ao vivo: aponta para o código e lê sozinho ---------- */
-const CAM = { stream:null, timer:0, det:null, ultimo:"", vezes:0 };
+/* ---------- câmera ao vivo dentro da tela do leitor: lê sozinha, sem abrir outra janela ---------- */
+const CAM = { stream:null, det:null, timer:0, ultimo:"", vezes:0, luz:false, erro:"", fora:0, bloq:"", bloqAte:0, ligando:false };
 const eanValido = c => { if(!/^(\d{8}|\d{12}|\d{13})$/.test(c)) return false; const d = c.split("").map(Number), chk = d.pop(); const s = d.reverse().reduce((a, n, i) => a + n * (i % 2 ? 1 : 3), 0); return (10 - s % 10) % 10 === chk; };
 function carregaScript(src){ return new Promise((ok, err) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => err(new Error("Não foi possível carregar o leitor.")); document.head.appendChild(s); }); }
 async function detector(){
@@ -455,68 +447,87 @@ async function detector(){
   if(!window.BarcodeDetectionAPI) await carregaScript("https://cdn.jsdelivr.net/npm/barcode-detector@3.2.3/dist/iife/ponyfill.js");
   return CAM.det = new window.BarcodeDetectionAPI.BarcodeDetector({ formats });
 }
-function fecharCamera(){
+function desligarCamera(){
   clearTimeout(CAM.timer); CAM.timer = 0;
   if(CAM.stream){ CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = null; }
-  const el = document.getElementById("live"); if(el) el.remove();
-  document.body.style.overflow = "";
+  CAM.luz = false;
+  const box = document.getElementById("scanBox"); if(box) box.classList.remove("on");
 }
-async function abrirCamera(){
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ $("#camFile").click(); return; }
-  fecharCamera();
-  const el = document.createElement("div");
-  el.id = "live"; el.className = "live"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Leitor de código de barras");
-  el.innerHTML = `<video playsinline muted autoplay></video>
-    <div class="lv-top"><button class="lv-ic" data-lv="fechar" aria-label="Fechar câmera">✕</button><b style="flex:1">Aponte para o código de barras</b><button class="lv-ic" data-lv="luz" aria-label="Lanterna" hidden>💡</button></div>
-    <div class="lv-box" aria-hidden="true"><i></i><i></i><i></i><i></i><div class="ln"></div></div>
-    <div class="lv-bot"><span class="lv-msg" id="lvMsg">Abrindo a câmera…</span>
-      <button class="lv-btn" data-lv="foto" style="margin-top:12px">Não está lendo? Tirar foto</button></div>`;
-  document.body.appendChild(el); document.body.style.overflow = "hidden";
-  const msg = t => { const m = document.getElementById("lvMsg"); if(m) m.textContent = t; };
-  el.onclick = async e => {
-    const b = e.target.closest("[data-lv]"); if(!b) return;
-    if(b.dataset.lv === "fechar") fecharCamera();
-    if(b.dataset.lv === "foto"){ fecharCamera(); $("#camFile").click(); }
-    if(b.dataset.lv === "luz" && CAM.stream){ const tr = CAM.stream.getVideoTracks()[0]; CAM.luz = !CAM.luz; try{ await tr.applyConstraints({ advanced:[{ torch:CAM.luz }] }); }catch(x){} }
-  };
+async function ligarCamera(){
+  if(CAM.stream || CAM.ligando || document.hidden) return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ CAM.erro = "Câmera indisponível neste navegador. Use 📷 Foto"; return cameraNaTela(); }
+  CAM.ligando = true;
+  const t = document.getElementById("scanTxt"); if(t) t.firstChild.textContent = "Ligando a câmera…";
   try{
-    const [stream, det] = await Promise.all([
-      navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1920 }, height:{ ideal:1080 } } }),
+    const [stream] = await Promise.all([
+      navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1280 }, height:{ ideal:720 } } }),
       detector()
     ]);
-    if(!document.getElementById("live")){ stream.getTracks().forEach(t => t.stop()); return; }
-    CAM.stream = stream; CAM.ultimo = ""; CAM.vezes = 0; CAM.luz = false;
-    const v = el.querySelector("video"); v.srcObject = stream; await v.play().catch(() => {});
+    CAM.stream = stream; CAM.erro = ""; CAM.fora = 0;
     const tr = stream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
-    if(cap.torch) el.querySelector('[data-lv="luz"]').hidden = false;
+    CAM.temLuz = !!cap.torch;
     if(cap.focusMode && cap.focusMode.includes("continuous")) tr.applyConstraints({ advanced:[{ focusMode:"continuous" }] }).catch(() => {});
-    msg("Centralize o código dentro do quadro");
-    // lê só a faixa central (mais rápido e evita pegar outro código ao lado)
-    const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently:true });
-    const passo = async () => {
-      if(!CAM.stream) return;
-      try{
-        const W = v.videoWidth, H = v.videoHeight;
-        if(W && H){
-          const w = Math.round(W * .9), h = Math.round(Math.min(H * .45, w * .55));
-          cv.width = w; cv.height = h; cx.drawImage(v, (W - w) / 2, (H - h) / 2 - H * .03, w, h, 0, 0, w, h);
-          const r = (await det.detect(cv)).map(x => String(x.rawValue).replace(/\D/g, "")).find(eanValido);
-          if(r){
-            CAM.vezes = r === CAM.ultimo ? CAM.vezes + 1 : 1; CAM.ultimo = r;
-            if(CAM.vezes >= 2){ el.classList.add("ok"); if(navigator.vibrate) navigator.vibrate(60); fecharCamera(); buscar(r); return; }
-          }
-        }
-      }catch(x){}
-      CAM.timer = setTimeout(passo, 90);
-    };
-    passo();
   }catch(x){
     const negado = x && (x.name === "NotAllowedError" || x.name === "SecurityError");
-    msg(negado ? "A câmera foi bloqueada. Libere o acesso à câmera para este site nas configurações do navegador, ou tire uma foto." : "Não foi possível abrir a câmera. " + (x.message || ""));
+    CAM.erro = negado ? "Câmera bloqueada. Libere nas configurações do navegador ou toque em 📷 Foto" : "Não foi possível ligar a câmera. Toque para tentar de novo";
   }
+  CAM.ligando = false;
+  cameraNaTela();
 }
-document.addEventListener("visibilitychange", () => { if(document.hidden) fecharCamera(); });
-window.addEventListener("popstate", fecharCamera);
+async function luzCamera(){
+  if(!CAM.stream) return; CAM.luz = !CAM.luz;
+  try{ await CAM.stream.getVideoTracks()[0].applyConstraints({ advanced:[{ torch:CAM.luz }] }); }catch(x){}
+}
+// liga o vídeo ao elemento da tela atual (a tela é redesenhada a cada leitura) e mantém a leitura rodando
+function cameraNaTela(){
+  const box = document.getElementById("scanBox"), v = document.getElementById("scanVideo");
+  if(!box || !v) return;
+  const t = document.getElementById("scanTxt");
+  if(!CAM.stream){
+    box.classList.remove("on");
+    if(t) t.firstChild.textContent = CAM.erro || "Toque para ligar a câmera";
+    if(!CAM.erro) ligarCamera();
+    return;
+  }
+  box.classList.add("on");
+  if(t) t.firstChild.textContent = "Aponte para o código de barras";
+  const luz = document.getElementById("camLuz"); if(luz) luz.hidden = !CAM.temLuz;
+  if(v.srcObject !== CAM.stream){ v.srcObject = CAM.stream; v.play().catch(() => {}); }
+  if(!CAM.timer) passoCamera();
+}
+const cvCam = document.createElement("canvas"), cxCam = cvCam.getContext("2d", { willReadFrequently:true });
+async function passoCamera(){
+  CAM.timer = 0;
+  if(!CAM.stream) return;
+  const v = document.getElementById("scanVideo");
+  // fora da tela do leitor: não lê; depois de 2 minutos fora, desliga para poupar bateria
+  if(!v || document.hidden){
+    CAM.fora ||= Date.now();
+    if(Date.now() - CAM.fora > 120e3 || document.hidden) return desligarCamera();
+    CAM.timer = setTimeout(passoCamera, 400); return;
+  }
+  CAM.fora = 0;
+  try{
+    if(v.srcObject !== CAM.stream){ v.srcObject = CAM.stream; v.play().catch(() => {}); }
+    const W = v.videoWidth, H = v.videoHeight;
+    if(W && H && !V.busy){
+      const w = Math.round(W * .85), h = Math.round(Math.min(H * .5, w * .6));
+      cvCam.width = w; cvCam.height = h; cxCam.drawImage(v, (W - w) / 2, (H - h) / 2, w, h, 0, 0, w, h);
+      const r = (await CAM.det.detect(cvCam)).map(x => String(x.rawValue).replace(/\D/g, "")).find(eanValido);
+      if(r && !(r === CAM.bloq && Date.now() < CAM.bloqAte)){
+        CAM.vezes = r === CAM.ultimo ? CAM.vezes + 1 : 1; CAM.ultimo = r;
+        if(CAM.vezes >= 2){
+          CAM.vezes = 0; CAM.ultimo = ""; CAM.bloq = r; CAM.bloqAte = Date.now() + 4000;
+          const box = document.getElementById("scanBox"); if(box) box.classList.add("ok");
+          if(navigator.vibrate) navigator.vibrate(60);
+          buscar(r);
+        }
+      }
+    }
+  }catch(x){}
+  if(CAM.stream && !CAM.timer) CAM.timer = setTimeout(passoCamera, 90);
+}
+document.addEventListener("visibilitychange", () => { if(document.hidden) desligarCamera(); else if(document.getElementById("scanBox")) { CAM.erro = ""; ligarCamera(); } });
 
 async function lerFoto(file){
   try{
@@ -969,7 +980,9 @@ document.addEventListener("click", async e => {
     case "logout": api.logout(); V.screen = "scanner"; S.asVendedor = false; render(); break;
     case "to-admin": S.asVendedor = false; render(); break;
     case "to-vendedor": S.asVendedor = true; V.screen = "scanner"; render(); window.scrollTo(0,0); break;
-    case "camera": abrirCamera(); break;
+    case "camera": if(!CAM.stream){ CAM.erro = ""; ligarCamera(); } break;
+    case "cam-foto": $("#camFile").click(); break;
+    case "cam-luz": luzCamera(); break;
     case "abrir": { const v = await api.variacao(el.dataset.id); if(v) abrirVar(v); break; }
     case "voltar": V.screen = "scanner"; V.nf = null; renderVendedor(); window.scrollTo(0,0); break;
     case "filtro": V.filtro = el.dataset.f; renderProduto(); break;
