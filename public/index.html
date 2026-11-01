@@ -185,9 +185,16 @@ mark{background:#F3E3BF;color:inherit;border-radius:3px;padding:0 1px}
 .amb-row::-webkit-scrollbar{display:none}
 .amb-row .pill{height:36px;flex-shrink:0;padding:0 12px}
 .amb-l{font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0;margin-right:2px}
-.amb-sel{display:inline-flex;align-items:center;gap:8px}
-.amb-seta{font-size:10px;opacity:.7}
-.amb-x{flex:0 0 36px;height:36px;border-radius:18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:11px}
+.amb-gaveta{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease,opacity .2s ease;opacity:0;margin-bottom:-8px}
+.amb-gaveta>div{overflow:hidden;min-height:0}
+.pbot.amb-on .amb-gaveta{grid-template-rows:1fr;opacity:1;margin-bottom:0}
+.amb-gaveta[aria-hidden="true"] .pill{visibility:hidden}
+.pbot.amb-on .amb-gaveta .pill{visibility:visible}
+.amb-aba{position:absolute;left:50%;top:0;transform:translate(-50%,-100%);display:inline-flex;align-items:center;gap:6px;max-width:70%;height:30px;padding:0 14px;border:1px solid var(--line);border-bottom:0;border-radius:14px 14px 0 0;background:var(--bg);color:var(--ink);font:inherit;font-size:12px;font-weight:700;box-shadow:0 -4px 10px rgba(15,58,78,.06)}
+.amb-aba .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.amb-aba .seta{font-size:9px;transition:transform .28s ease}
+.pbot.amb-on .amb-aba .seta{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.amb-gaveta,.amb-aba .seta{transition:none}}
 .sug{display:flex;flex-wrap:wrap;gap:6px}
 .grp{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line)}
 .grp-t{display:flex;align-items:center;gap:2px;min-width:0}
@@ -711,7 +718,8 @@ function renderProduto(){
           <span class="e" style="color:${s.c}"><span class="dot" style="background:${s.c}"></span>${x.total}</span></button>`; }).join("")}
       </div>
     </div>
-    <div class="pbot" style="display:flex;flex-direction:column;gap:8px">
+    <div class="pbot${V.ambAberto ? " amb-on" : ""}" style="display:flex;flex-direction:column;gap:8px">
+      ${ambAba()}
       ${ambRow()}
       <div style="display:flex;gap:10px;align-items:center">
         <div class="step"><button data-act="q-" aria-label="Diminuir quantidade">−</button><input id="qtd" type="number" min="1" inputmode="numeric" value="${V.qtd || 1}" aria-label="Quantidade"><button data-act="q+" aria-label="Aumentar quantidade">+</button></div>
@@ -1383,13 +1391,22 @@ function ambList(){
 }
 function ambRow(){
   const l = ambList();
-  // começa recolhido: mostra só o ambiente escolhido e a seta para abrir as opções
-  if(!V.ambAberto) return `<div class="amb-row" role="group" aria-label="Ambiente da peça"><span class="amb-l">Ambiente</span>
-    <button class="pill amb-sel" data-act="amb-toggle" aria-expanded="false" aria-label="Escolher ambiente (atual: ${esc(V.amb || "Sem ambiente")})">${esc(V.amb || "Sem ambiente")}<span aria-hidden="true" class="amb-seta">▲</span></button></div>`;
-  return `<div class="amb-row" role="group" aria-label="Ambiente da peça"><button class="amb-x" data-act="amb-toggle" aria-expanded="true" aria-label="Esconder ambientes">▼</button><span class="amb-l">Ambiente</span>
+  return `<div class="amb-gaveta" id="ambGaveta" aria-hidden="${!V.ambAberto}"><div><div class="amb-row" role="group" aria-label="Ambiente da peça"><span class="amb-l">Ambiente</span>
     <button class="pill" data-act="amb-pick" data-a="" aria-pressed="${!V.amb}">Sem ambiente</button>
     ${l.map(a => `<button class="pill" data-act="amb-pick" data-a="${esc(a)}" aria-pressed="${V.amb === a}">${esc(a)}</button>`).join("")}
-    <button class="pill" data-act="amb-novo" style="border-style:dashed">+ Novo ambiente</button></div>`;
+    <button class="pill" data-act="amb-novo" style="border-style:dashed">+ Novo ambiente</button></div></div></div>`;
+}
+// aba que fica para fora da barra de baixo: toca e a gaveta de ambientes sobe
+function ambAba(){
+  return `<button class="amb-aba" data-act="amb-toggle" aria-expanded="${!!V.ambAberto}" aria-controls="ambGaveta"><span class="seta" aria-hidden="true">▲</span><span class="txt">${esc(V.amb || "Sem ambiente")}</span></button>`;
+}
+function gavetaAmb(abrir){
+  V.ambAberto = abrir;
+  const pb = document.querySelector(".pbot"), g = $("#ambGaveta"), aba = document.querySelector(".amb-aba");
+  if(!pb) return;
+  pb.classList.toggle("amb-on", abrir);
+  if(g) g.setAttribute("aria-hidden", String(!abrir));
+  if(aba) aba.setAttribute("aria-expanded", String(abrir));
 }
 function modalAmb(err){
   const l = ambList();
@@ -1460,8 +1477,8 @@ document.addEventListener("click", async e => {
       case "pq": { const p = api.prepedido(V.preId), it = p.itens.find(i => i.key === el.dataset.k);
         if(+el.dataset.d <= -999999){ await excluirItem(it.key); break; }
         const nq = it.qtd + +el.dataset.d; if(nq <= 0){ await excluirItem(it.key); break; } await api.setQtd(p.id, it.key, nq); renderPreDet(); break; }
-      case "amb-pick": guardaQtd(); ambList(); V.amb = el.dataset.a; V.ambAberto = false; renderProduto(); break;
-      case "amb-toggle": guardaQtd(); V.ambAberto = !V.ambAberto; renderProduto(); break;
+      case "amb-pick": guardaQtd(); ambList(); V.amb = el.dataset.a; gavetaAmb(false); setTimeout(() => { if(V.screen === "produto") renderProduto(); }, 300); break;
+      case "amb-toggle": gavetaAmb(!V.ambAberto); break;
       case "amb-novo": guardaQtd(); modalAmb(); break;
       case "amb-ren": modalRenomear(el.dataset.a); break;
       case "cli-edit": modalCliente(); break;
