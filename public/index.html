@@ -75,6 +75,7 @@ button{cursor:pointer}
 .scan-sub{display:block;font-size:12px;font-weight:500;color:#B7CAD4;margin-top:3px}
 .dk-inp{background:#164C64;border-color:#3C6E86;color:#F7F4EF;font-family:var(--mono);letter-spacing:.04em}
 .dk-inp::placeholder{color:#93A9B5}
+.rec-img{flex:0 0 44px;width:44px;height:44px;border-radius:10px;background:#fff;object-fit:contain;display:block}
 .rec{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#164C64;border:0;border-radius:14px;padding:10px 12px;min-height:58px;color:#F7F4EF}
 .sw{width:22px;height:22px;border-radius:999px;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 .nf{background:#2B2118;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
@@ -422,7 +423,7 @@ function renderVendedor(){
     <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:8px">
       <span style="font-size:12px;color:#B7CAD4;font-weight:600">Últimas leituras</span>
       ${rec.length ? rec.map(r => `<button class="rec" data-act="abrir" data-id="${esc(r.id)}">
-          <span class="sw" style="background:${esc(r.hex)}"></span>
+          ${r.foto ? `<img class="rec-img" src="${esc(r.foto)}" alt="" loading="lazy" decoding="async">` : `<span class="rec-img" aria-hidden="true" style="display:grid;place-items:center;background:#0F3A4E"><span class="sw" style="background:${esc(r.hex)}"></span></span>`}
           <span style="display:flex;flex-direction:column;flex:1;min-width:0"><span style="font-size:14px;font-weight:600">${esc(r.nome)}</span><span style="font-size:12px;color:#B7CAD4">${esc(r.cor)} · ${esc(r.tam)}</span></span>
           <span style="font-size:14px;font-weight:700">${brl(r.preco)}</span></button>`).join("")
         : `<span style="font-size:13px;color:#93A9B5">Nenhuma leitura ainda.</span>`}
@@ -463,7 +464,8 @@ async function ligarCamera(){
       navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1280 }, height:{ ideal:720 } } }),
       detector()
     ]);
-    CAM.stream = stream; CAM.erro = ""; CAM.fora = 0;
+    CAM.stream = stream; CAM.erro = "";
+    if(!document.getElementById("scanBox") || document.hidden){ CAM.ligando = false; return desligarCamera(); }
     const tr = stream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
     CAM.temLuz = !!cap.torch;
     if(cap.focusMode && cap.focusMode.includes("continuous")) tr.applyConstraints({ advanced:[{ focusMode:"continuous" }] }).catch(() => {});
@@ -500,13 +502,8 @@ async function passoCamera(){
   CAM.timer = 0;
   if(!CAM.stream) return;
   const v = document.getElementById("scanVideo");
-  // fora da tela do leitor: não lê; depois de 2 minutos fora, desliga para poupar bateria
-  if(!v || document.hidden){
-    CAM.fora ||= Date.now();
-    if(Date.now() - CAM.fora > 120e3 || document.hidden) return desligarCamera();
-    CAM.timer = setTimeout(passoCamera, 400); return;
-  }
-  CAM.fora = 0;
+  // saiu da tela de leitura (produto, pré-pedido, admin) ou do app: desliga na hora; liga de novo ao voltar
+  if(!v || document.hidden) return desligarCamera();
   try{
     if(v.srcObject !== CAM.stream){ v.srcObject = CAM.stream; v.play().catch(() => {}); }
     const W = v.videoWidth, H = v.videoHeight;
@@ -577,7 +574,7 @@ async function abrirVar(v){
   V.cur = v; V.slide = 0; V.filtro = "todas"; V.nf = null; V.screen = "produto";
   V.list = await api.variacoesDe(v.prod);
   const rec = store.get(recKey(), []).filter(r => r.id !== v.id);
-  rec.unshift({ id:v.id, nome:v.titulo, cor:v.cor, tam:v.tam, hex:v.hex, preco:v.preco.varejo });
+  rec.unshift({ id:v.id, nome:v.titulo, cor:v.cor, tam:v.tam, hex:v.hex, preco:v.preco.varejo, foto:(v.fotos || [])[0] || "" });
   store.set(recKey(), rec.slice(0, 5));
   renderVendedor(); window.scrollTo(0, 0);
 }
