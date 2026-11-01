@@ -1398,7 +1398,7 @@ function ambRow(){
 }
 // aba que fica para fora da barra de baixo: toca e a gaveta de ambientes sobe
 function ambAba(){
-  return `<button class="amb-aba" data-act="amb-toggle" aria-expanded="${!!V.ambAberto}" aria-controls="ambGaveta"><span class="seta" aria-hidden="true">▲</span><span class="txt">${esc(V.amb || "Sem ambiente")}</span></button>`;
+  return `<button class="amb-aba" data-act="amb-toggle" aria-expanded="${!!V.ambAberto}" aria-controls="ambGaveta"><span class="seta" aria-hidden="true">▲</span><span class="txt">Separe por Ambientes${V.amb ? ` · <b style="color:var(--accent)">${esc(V.amb)}</b>` : ""}</span></button>`;
 }
 function gavetaAmb(abrir){
   V.ambAberto = abrir;
