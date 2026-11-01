@@ -434,6 +434,15 @@ function renderVendedor(){
   $("#eanForm").onsubmit = e => { e.preventDefault(); buscar(inp.value); };
   $("#camFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) lerFoto(f); };
   cameraNaTela();
+  fotosRecentes(rec);
+}
+// leituras antigas (gravadas antes da miniatura) buscam a foto uma vez
+let recFotoFeito = false;
+async function fotosRecentes(rec){
+  if(recFotoFeito || !rec.some(r => r.foto === undefined)) return; recFotoFeito = true;
+  for(const r of rec) if(r.foto === undefined){ try{ const v = await api.variacao(r.id); r.foto = (v && v.fotos && v.fotos[0]) || ""; }catch(e){ r.foto = ""; } }
+  store.set(recKey(), rec);
+  if(V.screen === "scanner" && document.getElementById("scanBox")) renderVendedor();
 }
 
 /* ---------- câmera ao vivo dentro da tela do leitor: lê sozinha, sem abrir outra janela ---------- */
