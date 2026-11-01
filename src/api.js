@@ -25,6 +25,8 @@
      e a tela agrupa por ele. Cor e tamanho saem do título quando a derivação vem como "Único". */
   const COR_PALAVRA = /^(pret[oa]|dourad[oa]|gold|n[ií]quel|cromad[oa]|cromo|ros[eé]|rosa|bronze|branc[oa]|escovad[oa]|[oô]nix|grafite|cobre|[aâ]mbar|menta|antique|fosc[oa]|acetinad[oa]|ouro|inox|champagne|prata|tit[aâ]nio|verde|azul|cinza|nude|vecchio|vechio|bege|marrom|azal[eé]ia|a[cç]o|matte|polido|opaco|lat[aã]o|vermelh[oa]|amarel[oa]|natural|madeira|couro|chumbo|caramelo|off|baby|velho|real|vintage|grafit|mettalo|metalo)$/i;
   const MEDIDA = /^(\d+([.,]\d+)?(mm|cm)|\d+x\d+(mm)?)$/i, LETRA = /^(pp|p|m|g|gg|mini)$/i, CODIGO = /^((il|zp|ba|df)[\d.]+[a-z]?|\d+)$/i;
+  // a Magazord manda "Nome do produto - Marca - Tamanho": na tela fica só o nome
+  const nomeLimpo = t => String(t || "").split(/\s+-\s*|\s*-\s+/)[0].replace(/\s{2,}/g, " ").trim();
   const toksDe = t => String(t || "").split(" - ")[0].replace(/[()]/g, " ").split(/\s+/).filter(Boolean);
   function tamDoTitulo(r){
     const tk = toksDe(r.titulo || r.produto_nome);
@@ -45,7 +47,7 @@
 
   function view(r, tams){
     const cor = corDoTitulo(r);
-    const v = { id:r.id, prod:r.modelo || r.produto_id, modelo:r.modelo || "", nome:r.produto_nome || r.titulo, titulo:r.titulo || r.produto_nome, linha:r.linha || "",
+    const v = { id:r.id, prod:r.modelo || r.produto_id, modelo:r.modelo || "", nome:nomeLimpo(r.produto_nome || r.titulo), titulo:nomeLimpo(r.titulo || r.produto_nome), tituloMz:r.titulo || r.produto_nome || "", linha:r.linha || "",
       cor, tam:tamDoTitulo(r), sku:r.sku || r.id, ean:r.ean || "", hex:hexDe(cor || r.titulo),
       preco:{ varejo:Number(r.preco) || 0, promo: r.preco_promo != null && Number(r.preco_promo) > 0 && Number(r.preco_promo) < Number(r.preco) ? Number(r.preco_promo) : null },
       estoque:{ cd:Number(r.estoque) || 0 }, total:Number(r.estoque) || 0, fotos:Array.isArray(r.imagens) ? r.imagens : [], ti:0, nTams:1 };
@@ -195,6 +197,7 @@
     },
     async vincular(ean, varId){ ok(await sb.from("aliases").upsert({ ean, var_id:varId }, { onConflict:"ean" })); C.aliases[ean] = varId; return true; },
     produtosCache(){ return C.prods; },
+    nomeLimpo,
     resolvidos(){ return clone(C.aliases); },
     consultas(){ return clone(C.consultas); },
     sync(){ return { last:(C.mz.sync && C.mz.sync.last) || null, hist:clone(C.hist) }; },
