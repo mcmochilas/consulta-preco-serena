@@ -78,20 +78,20 @@ button{cursor:pointer}
 .scan-sub{display:block;font-size:12px;font-weight:500;color:#B7CAD4;margin-top:3px}
 .dk-inp{background:#164C64;border-color:#3C6E86;color:#F7F4EF;font-family:var(--mono);letter-spacing:.04em}
 .dk-inp::placeholder{color:#93A9B5}
-.sug{display:flex;flex-direction:column;background:#F7F4EF;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.28);margin-top:4px}
-.sug:empty{display:none}
-.sug button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #E6E1D8;background:transparent;padding:8px 12px;min-height:56px;color:#0F3A4E;font:inherit}
-.sug button:last-child{border-bottom:0}
-.sug button:active,.sug button[aria-selected="true"]{background:#EDE6D9}
-.sug img,.sug .ph{flex:0 0 40px;width:40px;height:40px;border-radius:8px;background:#fff;object-fit:contain;border:1px solid #E6E1D8}
-.sug .m{display:flex;flex-direction:column;gap:2px;flex:1 1 0;min-width:0}
-.sug .sn{font-size:14px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sug .sn.corta{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),rgba(0,0,0,.25));mask-image:linear-gradient(90deg,#000 calc(100% - 28px),rgba(0,0,0,.25))}
-.sug .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sug .s{font-size:12px;color:#5B6B73}
-.sug .p{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:14px;font-weight:700;white-space:nowrap;padding-left:6px}
-.sug .p .e{font-size:12px;font-weight:500;color:#5B6B73}
-.sug .vazio{padding:14px 12px;font-size:14px;color:#5B6B73}
+.bsug{display:flex;flex-direction:column;background:#F7F4EF;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.28);margin-top:4px}
+.bsug:empty{display:none}
+.bsug button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #E6E1D8;background:transparent;padding:8px 12px;min-height:56px;color:#0F3A4E;font:inherit}
+.bsug button:last-child{border-bottom:0}
+.bsug button:active,.bsug button[aria-selected="true"]{background:#EDE6D9}
+.bsug img,.bsug .ph{flex:0 0 40px;width:40px;height:40px;border-radius:8px;background:#fff;object-fit:contain;border:1px solid #E6E1D8}
+.bsug .m{display:flex;flex-direction:column;gap:2px;flex:1 1 0;min-width:0}
+.bsug .sn{font-size:14px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsug .sn.corta{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),rgba(0,0,0,.25));mask-image:linear-gradient(90deg,#000 calc(100% - 28px),rgba(0,0,0,.25))}
+.bsug .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bsug .s{font-size:12px;color:#5B6B73}
+.bsug .p{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:14px;font-weight:700;white-space:nowrap;padding-left:6px}
+.bsug .p .e{font-size:12px;font-weight:500;color:#5B6B73}
+.bsug .vazio{padding:14px 12px;font-size:14px;color:#5B6B73}
 .rec-img{flex:0 0 44px;width:44px;height:44px;border-radius:10px;background:#fff;object-fit:contain;display:block}
 .rec{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#164C64;border:0;border-radius:14px;padding:10px 12px;min-height:58px;color:#F7F4EF}
 .sw{width:22px;height:22px;border-radius:999px;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
@@ -185,6 +185,9 @@ mark{background:#F3E3BF;color:inherit;border-radius:3px;padding:0 1px}
 .amb-row::-webkit-scrollbar{display:none}
 .amb-row .pill{height:36px;flex-shrink:0;padding:0 12px}
 .amb-l{font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0;margin-right:2px}
+.amb-sel{display:inline-flex;align-items:center;gap:8px}
+.amb-seta{font-size:10px;opacity:.7}
+.amb-x{flex:0 0 36px;height:36px;border-radius:18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:11px}
 .sug{display:flex;flex-wrap:wrap;gap:6px}
 .grp{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line)}
 .grp-t{display:flex;align-items:center;gap:2px;min-width:0}
@@ -434,7 +437,7 @@ function renderVendedor(){
           <input class="inp dk-inp" id="eanIn" type="search" enterkeyhint="search" placeholder="Ex.: 789…, 10777, Shell dourado" value="${esc(V.q || "")}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="sug" aria-expanded="false" style="flex:1;min-width:0;font-family:var(--body);letter-spacing:0">
           <button class="btn" type="submit" style="background:#F7F4EF;color:#0F3A4E;border:0">Buscar</button>
         </div>
-        <div class="sug" id="sug" role="listbox" aria-label="Sugestões"></div>
+        <div class="bsug" id="sug" role="listbox" aria-label="Sugestões"></div>
       </form>
       ${V.nf ? `<div class="nf" role="alert"><b>${esc(V.nf.titulo)}</b><span>${V.nf.html}</span></div>` : ""}
       ${api.test ? `<button class="btn btn-sm" data-act="simular" style="background:transparent;color:#FFD195;border:1px dashed #8C7A55;align-self:flex-start">Simular leitura de um mostruário</button>` : ""}
@@ -1380,7 +1383,10 @@ function ambList(){
 }
 function ambRow(){
   const l = ambList();
-  return `<div class="amb-row" role="group" aria-label="Ambiente da peça"><span class="amb-l">Ambiente</span>
+  // começa recolhido: mostra só o ambiente escolhido e a seta para abrir as opções
+  if(!V.ambAberto) return `<div class="amb-row" role="group" aria-label="Ambiente da peça"><span class="amb-l">Ambiente</span>
+    <button class="pill amb-sel" data-act="amb-toggle" aria-expanded="false" aria-label="Escolher ambiente (atual: ${esc(V.amb || "Sem ambiente")})">${esc(V.amb || "Sem ambiente")}<span aria-hidden="true" class="amb-seta">▲</span></button></div>`;
+  return `<div class="amb-row" role="group" aria-label="Ambiente da peça"><button class="amb-x" data-act="amb-toggle" aria-expanded="true" aria-label="Esconder ambientes">▼</button><span class="amb-l">Ambiente</span>
     <button class="pill" data-act="amb-pick" data-a="" aria-pressed="${!V.amb}">Sem ambiente</button>
     ${l.map(a => `<button class="pill" data-act="amb-pick" data-a="${esc(a)}" aria-pressed="${V.amb === a}">${esc(a)}</button>`).join("")}
     <button class="pill" data-act="amb-novo" style="border-style:dashed">+ Novo ambiente</button></div>`;
@@ -1399,7 +1405,7 @@ function modalAmb(err){
     const p = ativo();
     try{ if(p) await api.addAmbiente(p.id, nome); else if(!(V.ambNovos ||= []).includes(nome)) V.ambNovos.push(nome); }
     catch(x){ return modalAmb(x.message); }
-    V.amb = nome; closeModal(); renderProduto(); };
+    V.amb = nome; V.ambAberto = false; closeModal(); renderProduto(); };
 }
 const guardaQtd = () => { const i = $("#qtd"); if(i) V.qtd = Math.max(1, parseInt(i.value, 10) || 1); };
 
@@ -1454,7 +1460,8 @@ document.addEventListener("click", async e => {
       case "pq": { const p = api.prepedido(V.preId), it = p.itens.find(i => i.key === el.dataset.k);
         if(+el.dataset.d <= -999999){ await excluirItem(it.key); break; }
         const nq = it.qtd + +el.dataset.d; if(nq <= 0){ await excluirItem(it.key); break; } await api.setQtd(p.id, it.key, nq); renderPreDet(); break; }
-      case "amb-pick": guardaQtd(); ambList(); V.amb = el.dataset.a; renderProduto(); break;
+      case "amb-pick": guardaQtd(); ambList(); V.amb = el.dataset.a; V.ambAberto = false; renderProduto(); break;
+      case "amb-toggle": guardaQtd(); V.ambAberto = !V.ambAberto; renderProduto(); break;
       case "amb-novo": guardaQtd(); modalAmb(); break;
       case "amb-ren": modalRenomear(el.dataset.a); break;
       case "cli-edit": modalCliente(); break;

@@ -36,7 +36,8 @@
     return /\bponto\b/i.test(r.titulo || "") || /^ponto$/i.test(der) ? "Ponto" : "";
   }
   function corDoTitulo(r){
-    if(r.cor && !/^(único|unico)$/i.test(r.cor)) return r.cor;
+    // a derivação às vezes traz o tamanho (P/M/G, Ponto, Mini) no lugar da cor: só aceita se for nome de cor
+    if(r.cor && toksDe(r.cor).some(x => COR_PALAVRA.test(x))) return r.cor;
     const tk = toksDe(r.titulo || r.produto_nome), i = tk.findIndex(x => COR_PALAVRA.test(x));
     if(i < 0) return "";
     return tk.slice(i).filter(x => !CODIGO.test(x) && !MEDIDA.test(x) && !LETRA.test(x)).join(" ").replace(/^\w/, c => c.toUpperCase());
