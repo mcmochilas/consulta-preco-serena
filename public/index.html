@@ -194,10 +194,10 @@ body.dragging{cursor:grabbing}
 .acts .btn{flex:1 1 200px}
 
 /* ---------- admin ---------- */
-.ad{display:flex;min-height:100vh}
-.ad nav{flex:0 0 260px;width:260px;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--petrol-d);color:#F7F4EF;padding:24px 16px;display:flex;flex-direction:column;gap:22px}
-.ad nav .brand b{font-family:var(--display);font-size:20px;display:block}
-.ad nav .brand small{font-size:12px;color:#B7CAD4}
+.painel{display:flex;min-height:100vh}
+.painel nav{flex:0 0 260px;width:260px;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--petrol-d);color:#F7F4EF;padding:24px 16px;display:flex;flex-direction:column;gap:22px}
+.painel nav .brand b{font-family:var(--display);font-size:20px;display:block}
+.painel nav .brand small{font-size:12px;color:#B7CAD4}
 .navb{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:0 12px;border-radius:10px;border:0;background:transparent;color:#E3ECF0;text-align:left;font-size:14px;font-weight:600}
 .navb[aria-current="page"]{background:#F7F4EF;color:var(--petrol-d);box-shadow:inset 3px 0 0 var(--gold)}
 .badge{font-size:12px;font-weight:700;background:var(--gold);color:var(--ink);border-radius:999px;padding:2px 8px}
@@ -205,9 +205,9 @@ body.dragging{cursor:grabbing}
 .navstat{padding:12px;border-radius:12px;background:#164C64;display:flex;flex-direction:column;gap:4px;font-size:12px;color:#B7CAD4}
 .navstat b{color:#F7F4EF;font-size:13px;display:flex;align-items:center;gap:8px}
 .navlink{border:1px solid #3C6E86;background:transparent;color:#F7F4EF;border-radius:10px;min-height:42px;font-size:13px;font-weight:700}
-.ad main{flex:1 1 0;min-width:0;padding:32px 32px 48px;display:flex;flex-direction:column;gap:22px;max-width:1400px}
-@media (max-width:760px){.ad{flex-direction:column}.ad nav{flex:none;width:auto;height:auto;position:static}}
-@media (max-width:640px){.ad main{padding:20px 14px 40px}}
+.painel main{flex:1 1 0;min-width:0;padding:32px 32px 48px;display:flex;flex-direction:column;gap:22px;max-width:1400px}
+@media (max-width:760px){.painel{flex-direction:column}.painel nav{flex:none;width:auto;height:auto;position:static}}
+@media (max-width:640px){.painel main{padding:20px 14px 40px}}
 .hdr{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
 .hdr h1{margin:0;font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:-.02em}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
@@ -218,8 +218,8 @@ body.dragging{cursor:grabbing}
 .box{background:var(--surface);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
 .box h2{margin:0;font-family:var(--display);font-weight:600;font-size:17px}
 .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.ad .inp{height:42px;font-size:14px;border-radius:10px}
-.ad .btn{height:42px;font-size:14px;border-radius:10px}
+.painel .inp{height:42px;font-size:14px;border-radius:10px}
+.painel .btn{height:42px;font-size:14px;border-radius:10px}
 .sw-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line2)}
 .switch{width:46px;height:28px;border-radius:999px;border:0;padding:3px;display:flex;background:#CFCCC5;flex-shrink:0}
 .switch span{width:22px;height:22px;border-radius:999px;background:#fff;display:block}
@@ -580,7 +580,7 @@ const statusOf = v => !v.ean ? "Sem EAN" : !v.imagens ? "Sem imagem" : v.total =
 const TAG = { "Ok":"tag-ok", "Sem EAN":"tag-warn", "Sem imagem":"tag-acc", "Sem estoque":"tag-off" };
 
 async function renderAdmin(){
-  const topo = !document.querySelector(".ad");
+  const topo = !document.querySelector(".painel");
   const prods = await api.produtos();
   const cons = api.consultas(), resolv = api.resolvidos();
   const pend = prods.filter(v => !v.ean || !v.imagens).length;
@@ -588,7 +588,7 @@ async function renderAdmin(){
   const sync = api.sync();
   const body = A.tab === undefined ? "" : "";
   const tab = S.adminTab;
-  $("#app").innerHTML = `<div class="ad">
+  $("#app").innerHTML = `<div class="painel">
     <nav aria-label="Seções">
       <div class="brand" style="padding:0 8px;display:flex;flex-direction:column;gap:8px"><img src="${LOGO.escuro}" alt="Serena Puxadores" style="width:150px;height:auto;display:block"><small style="font-family:var(--display);font-weight:700;letter-spacing:.2em;text-transform:uppercase;font-size:10px;color:var(--gold)">Consulta de preço · Admin</small></div>
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -601,7 +601,7 @@ async function renderAdmin(){
         <button class="navlink" data-act="logout">Sair</button>
       </div>
     </nav>
-    <main id="adMain">${tab === "integ" ? admInteg(prods, pend, sync) : tab === "prod" ? admProd(prods) : tab === "pre" ? admPre() : tab === "vend" ? admVend(cons) : admCons(cons, nfs, prods)}</main>
+    <main id="painelMain">${tab === "integ" ? admInteg(prods, pend, sync) : tab === "prod" ? admProd(prods) : tab === "pre" ? admPre() : tab === "vend" ? admVend(cons) : admCons(cons, nfs, prods)}</main>
   </div>`;
   if(topo) window.scrollTo(0, 0);
 }
