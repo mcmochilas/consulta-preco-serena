@@ -83,28 +83,30 @@ function atributo(o: any, re: RegExp) {
   });
   return val || String(pick(o, re, "string") ?? "");
 }
+const TAM = /^\s*\d+([.,]\d+)?\s*(mm|cm|m|pol)?\s*$|\d+\s*(mm|cm)\b/i;
 function mapDeriv(d: Obj, prod: Obj | null, base: string) {
-  const codigo = String(d.codigo ?? d.produtoDerivacaoCodigo ?? d.sku ?? d.id ?? "");
-  const prodCod = String(prod?.codigo ?? d.produtoCodigo ?? d.codigoProduto ?? d.produto?.codigo ?? d.produto ?? "");
-  const prodNome = String(prod?.nome ?? d.produtoNome ?? d.produto?.nome ?? "");
-  const derNome = String(d.nome ?? d.produtoDerivacaoNome ?? d.descricao ?? "");
-  const titulo = derNome && prodNome && !derNome.toLowerCase().includes(prodNome.toLowerCase()) ? `${prodNome} ${derNome}` : (derNome || prodNome);
-  const ativoV = d.ativo ?? d.situacao ?? prod?.ativo;
+  const codigo = String(d.codigo ?? d.id ?? "");
+  const nomeCompleto = String(d.nomeCompleto ?? "").trim();
+  const partes = nomeCompleto.split(" - ").map((x) => x.trim()).filter(Boolean);
+  const valores = (Array.isArray(d.derivacoes) ? d.derivacoes : []).map((x: Obj) => String(x?.valor ?? "").trim()).filter((v: string) => v && !/^(único|unico|padrão|padrao|u)$/i.test(v));
+  const tamanho = valores.find((v: string) => TAM.test(v)) || "";
+  const cor = valores.find((v: string) => v !== tamanho) || "";
+  const prodNome = String(prod?.nome ?? partes.slice(0, 2).join(" - ") ?? "");
   return {
     id: codigo,
-    produto_id: prodCod || codigo.split("-")[0],
-    produto_nome: prodNome || titulo,
-    titulo: titulo || codigo,
-    cor: atributo(d, /^cor$|cor\b|acabamento/i).slice(0, 60),
-    tamanho: atributo(d, /tamanho|medida|furac|dimens/i).slice(0, 60),
-    linha: String(prod?.marca?.nome ?? prod?.marcaNome ?? d.marcaNome ?? pick(prod || d, /^marca(Nome)?$/i, "string") ?? "").slice(0, 60),
+    produto_id: String(prod?.codigo ?? d.agrupador ?? codigo),
+    produto_nome: prodNome || nomeCompleto,
+    titulo: nomeCompleto || prodNome || String(d.nome ?? codigo),
+    cor: cor.slice(0, 60),
+    tamanho: tamanho.slice(0, 60),
+    linha: String(partes.length > 1 ? partes[1] : (prod?.modelo ?? "")).slice(0, 60),
     sku: codigo,
-    ean: eanNorm(pick(d, /^(ean|gtin|ean13|codigoBarras|codigoDeBarras|codigoEan)$/i)),
-    preco: pick(d, /^(precoVenda|valorVenda|precoPor|preco|valor|precoAtual)$/i, "number") ?? pick(prod, /^(precoVenda|valorVenda|preco|valor)$/i, "number") ?? null,
+    ean: eanNorm(d.ean),
+    preco: pick(d, /^(precoVenda|valorVenda|precoPor|preco|precoAtual)$/i, "number") ?? null,
     preco_promo: pick(d, /(precoPromocional|valorPromocional|precoPromocao)/i, "number") ?? null,
     estoque: Math.max(0, Math.round(pick(d, /^(estoqueDisponivel|quantidadeDisponivel|saldoDisponivel|disponivel|estoque|saldo|quantidadeEstoque)$/i, "number") ?? 0)),
-    imagens: imagensDe(d, base).concat(prod ? imagensDe({ m: prod.midias ?? prod.imagens ?? prod.midia }, base) : []).filter((x, i, a) => a.indexOf(x) === i).slice(0, 12),
-    ativo: ativoV === undefined ? true : !(ativoV === false || ativoV === 0 || /inativ|desativ/i.test(String(ativoV))),
+    imagens: imagensDe(d, base).slice(0, 12),
+    ativo: true,
     raw: d,
     updated_at: new Date().toISOString(),
   };
@@ -146,39 +148,134 @@ async function testar() {
     await tenta("Estoque v1", `/v1/listEstoque?produto=${encodeURIComponent(dc)}&limit=2`);
   }
   await tenta("Tabelas de preço", "/v2/site/tabelaPreco?limit=2&page=1");
+  const at = await sb.from("variacoes").select("id,produto_id").limit(1).maybeSingle();
+  const dA = String(at.data?.id || dc), pA = String(at.data?.produto_id || pc);
+  if (dA) {
+    await tenta("Vitrine do site (preço/estoque/fotos)", `/v2/site/frontend/produto/1/${encodeURIComponent(dA)}`);
+    await tenta("Projeção de estoque", `/v2/site/estoque/projecaoEstoque/produtoDerivacao?produto=${encodeURIComponent(dA)}`);
+    await tenta("Estoque por localização (ativa)", `/v2/estoqueLocalizacao/produto/${encodeURIComponent(dA)}`);
+    await tenta("Imagens (ativa)", `/v2/site/produto/${encodeURIComponent(pA)}/derivacao/${encodeURIComponent(dA)}/midia`);
+    await tenta("Produto ativo (detalhe)", `/v2/site/produto/${encodeURIComponent(pA)}`);
+  }
   await setCfg("magazord_probe", out);
   return out;
 }
 
-/* ---------- importação ---------- */
+/* ---------- importação: só produtos ativos e variações ativas ---------- */
+async function paginas(path: string, max: number, cada: (l: Obj[]) => void) {
+  for (let pagina = 1; pagina <= max; pagina++) {
+    const r = await mz(`${path}${path.includes("?") ? "&" : "?"}limit=100&page=${pagina}`);
+    if (r.status === 401 || r.status === 403) throw new Error(`A Magazord não liberou ${path} para este token (erro ${r.status}).`);
+    if (r.status >= 400) throw new Error(`A Magazord respondeu erro ${r.status} em ${path} (página ${pagina}).`);
+    const l = listOf(r.body); if (!l.length) return pagina;
+    cada(l);
+    if ((r.body as any)?.data?.has_more === false || l.length < 100) return pagina;
+  }
+  return max;
+}
 async function sync(origem: string) {
   const t0 = Date.now(), c = await creds();
-  const prodCache = new Map<string, Obj>();
-  let pagina = 1, total = 0, semEan = 0; const erros: string[] = [];
-  const vistos = new Set<string>();
-  for (; pagina <= 80; pagina++) {
-    const r = await mz(`/v2/site/produtoDerivacoes?limit=100&page=${pagina}`);
-    if (r.status === 401 || r.status === 403) throw new Error(`A Magazord não liberou a rota de variações para este token (erro ${r.status}).`);
-    if (r.status >= 400) throw new Error(`A Magazord respondeu erro ${r.status} na página ${pagina}.`);
-    const l = listOf(r.body);
-    if (!l.length) break;
-    const rows = l.map((d: Obj) => mapDeriv(d, prodCache.get(String(d.produtoCodigo ?? d.produto?.codigo ?? "")) || null, c.url)).filter((x) => x.id);
-    rows.forEach((x) => { vistos.add(x.id); if (!x.ean) semEan++; });
-    const { error } = await sb.from("variacoes").upsert(rows, { onConflict: "id" });
-    if (error) { erros.push(error.message); break; }
-    total += rows.length;
-    if ((r.body as any)?.data?.has_more === false || l.length < 100) break;
+  // 1) produtos: quem está ativo e de qual produto é cada variação
+  const paiDe = new Map<string, Obj>(); let prodAtivos = 0, prodInativos = 0;
+  const pgP = await paginas("/v2/site/produto", 80, (l) => l.forEach((p) => {
+    const ativo = p.ativo === true || p.ativo === 1;
+    if (ativo) prodAtivos++; else prodInativos++;
+    for (const d of (Array.isArray(p.derivacoes) ? p.derivacoes : [])) if (d && typeof d === "object" && d.codigo != null) paiDe.set(String(d.codigo), { codigo: p.codigo, nome: p.nome, modelo: p.modelo, ativo });
+  }));
+  // 2) variações: guarda só as ativas de produtos ativos
+  const vistos = new Set<string>(); let total = 0, semEan = 0, ignoradas = 0; const erros: string[] = [];
+  let lote: Obj[] = [];
+  // variações que já existem: só atualiza cadastro (preço, estoque, fotos e nomes vêm da vitrine)
+  const existentes = new Set<string>();
+  for (let from = 0; ; from += 1000) { const { data } = await sb.from("variacoes").select("id").range(from, from + 999); (data || []).forEach((x) => existentes.add(x.id)); if (!data || data.length < 1000) break; }
+  const grava = async () => {
+    if (!lote.length) return;
+    const novas = lote.filter((r) => !existentes.has(r.id)).map(({ preco, preco_promo, estoque, imagens, ...r }) => r);
+    const velhas = lote.filter((r) => existentes.has(r.id)).map((r) => ({ id: r.id, produto_id: r.produto_id, produto_nome: r.produto_nome, sku: r.sku, ean: r.ean, ativo: true, raw: r.raw, updated_at: r.updated_at }));
+    for (const parte of [novas, velhas]) if (parte.length) { const { error } = await sb.from("variacoes").upsert(parte, { onConflict: "id" }); if (error) erros.push(error.message); }
+    total += lote.length; lote = [];
+  };
+  const pend: Obj[][] = [];
+  const pgD = await paginas("/v2/site/produtoDerivacoes", 120, (l) => pend.push(l));
+  for (const l of pend) {
+    for (const d of l) {
+      const pai = paiDe.get(String(d.codigo));
+      const ativa = (d.ativo === true || d.ativo === 1) && (!pai || pai.ativo) && !/-inativo$/i.test(String(d.codigo)) && String(d.tipoRegistro || "").toLowerCase() !== "pai";
+      if (!ativa) { ignoradas++; continue; }
+      const row = mapDeriv(d, pai || null, c.url);
+      if (!row.id) continue;
+      vistos.add(row.id); if (!row.ean) semEan++;
+      lote.push(row);
+      if (lote.length >= 500) await grava();
+    }
   }
-  // o que sumiu da Magazord fica inativo (não aparece mais para o vendedor)
+  await grava();
+  // 3) o que não está mais ativo na Magazord sai da base
+  let removidas = 0;
   if (total && !erros.length) {
-    const { data: todos } = await sb.from("variacoes").select("id").eq("ativo", true);
-    const sumiram = (todos || []).map((x) => x.id).filter((id) => !vistos.has(id));
-    for (let i = 0; i < sumiram.length; i += 200) await sb.from("variacoes").update({ ativo: false }).in("id", sumiram.slice(i, i + 200));
+    const ids: string[] = [];
+    for (let from = 0; ; from += 1000) { const { data } = await sb.from("variacoes").select("id").range(from, from + 999); (data || []).forEach((x) => ids.push(x.id)); if (!data || data.length < 1000) break; }
+    const sair = ids.filter((id) => !vistos.has(id));
+    for (let i = 0; i < sair.length; i += 200) { await sb.from("variacoes").delete().in("id", sair.slice(i, i + 200)); }
+    removidas = sair.length;
   }
   const res = erros.length ? "Erro: " + erros[0].slice(0, 80) : semEan ? `${semEan} sem EAN` : "Ok";
-  await sb.from("sync_log").insert({ origem, itens: total, res, info: { ms: Date.now() - t0, paginas: pagina, erros } });
-  await setCfg("magazord_sync", { last: Date.now(), itens: total, res });
-  return { ok: !erros.length, itens: total, semEan, res };
+  const info = { ms: Date.now() - t0, paginasProdutos: pgP, paginasVariacoes: pgD, prodAtivos, prodInativos, ignoradas, removidas, erros };
+  await sb.from("sync_log").insert({ origem, itens: total, res, info });
+  await setCfg("magazord_sync", { last: Date.now(), itens: total, res, ...info });
+  return { ok: !erros.length, itens: total, semEan, res, ...info };
+}
+
+/* ---------- preço, estoque e fotos (rota da vitrine do site, uma variação por vez) ---------- */
+async function baseImagem(c: { url: string }, midia: Obj): Promise<string | null> {
+  const salvo = (await getCfg("img_base")).base as string | undefined;
+  if (salvo) return salvo;
+  const rel = String(midia.path || "") + String(midia.arquivo_nome || "");
+  const host = new URL(c.url).hostname, loja = host.split(".")[0];
+  const cands = [`https://${host.replace(".painel.", ".cdn.")}/`, `https://${loja}.cdn.magazord.com.br/`, "https://www.serenapuxadores.com.br/", "https://serenapuxadores.com.br/", `https://cdn.magazord.com.br/${loja}/`];
+  for (const b of cands) {
+    try { const r = await fetch(b + rel); const ok = r.ok && /^image\//.test(r.headers.get("content-type") || ""); await r.body?.cancel(); if (ok) { await setCfg("img_base", { base: b, at: Date.now() }); return b; } } catch { /* tenta a próxima */ }
+  }
+  await setCfg("img_base", { base: null, tentou: cands, rel, at: Date.now() });
+  return null;
+}
+// a Magazord limita as requisições por minuto (429): poucas por vez, para no primeiro 429 e continua na próxima rodada
+async function detalhar(limiteMs = 40e3, conc = 2, max = 120) {
+  const t0 = Date.now(), c = await creds();
+  const { data: fila } = await sb.from("variacoes").select("id").order("detalhe_at", { ascending: true, nullsFirst: true }).limit(max);
+  let feitos = 0, falhas = 0, limitado = false, base: string | null | undefined = undefined; const erros: string[] = [];
+  const um = async (v: Obj) => {
+    const r = await mz(`/v2/site/frontend/produto/1/${encodeURIComponent(v.id)}`);
+    if (r.status === 429) { limitado = true; return; }
+    const d = (r.body as any)?.data;
+    if (r.status >= 400 || !d || typeof d !== "object") { falhas++; if (erros.length < 3) erros.push(`${v.id}: ${r.status}`); await sb.from("variacoes").update({ detalhe_at: new Date().toISOString() }).eq("id", v.id); return; }
+    const midias = (Array.isArray(d.midias) ? d.midias : []).filter((m: Obj) => m && m.arquivo_nome && (m.tipo_file ?? 1) === 1).sort((a: Obj, b: Obj) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    if (base === undefined && midias[0]) base = await baseImagem(c, midias[0]);
+    const atrib = (Array.isArray(d.derivacoes_produto) ? d.derivacoes_produto : []).filter((x: Obj) => x && x.derivacao);
+    const cor = atrib.find((x: Obj) => /cor|acabamento/i.test(String(x.deri_nome)))?.derivacao;
+    const tam = atrib.find((x: Obj) => !/cor|acabamento/i.test(String(x.deri_nome)))?.derivacao;
+    const valor = Number(d.valor) || 0, de = Number(d.valor_de) || 0;
+    const patch: Obj = {
+      preco: de > valor ? de : valor, preco_promo: de > valor ? valor : null,
+      estoque: Math.max(0, Math.round(Number(d.qtde_estoque) || 0)),
+      imagens: base ? midias.map((m: Obj) => base + String(m.path || "") + String(m.arquivo_nome)).slice(0, 12) : [],
+      detalhe_at: new Date().toISOString(),
+    };
+    if (d.titulo) patch.titulo = String(d.titulo);
+    if (d.marca) patch.linha = String(d.marca).slice(0, 60);
+    if (cor && !/^(único|unico)$/i.test(cor)) patch.cor = String(cor).slice(0, 60);
+    if (tam && !/^(único|unico)$/i.test(tam)) patch.tamanho = String(tam).slice(0, 60);
+    if (d.ativo === false) patch.ativo = false;
+    await sb.from("variacoes").update(patch).eq("id", v.id);
+    feitos++;
+  };
+  let i = 0;
+  const lista = fila || [];
+  const trabalhador = async () => { while (!limitado && i < lista.length && Date.now() - t0 < limiteMs) { const v = lista[i++]; try { await um(v); } catch (e) { falhas++; if (erros.length < 3) erros.push((e as Error).message); } } };
+  await Promise.all(Array.from({ length: conc }, trabalhador));
+  const info = { feitos, falhas, limitado, ms: Date.now() - t0, erros };
+  await setCfg("magazord_detalhe", { last: Date.now(), ...info });
+  return info;
 }
 
 async function quem(req: Request) {
@@ -217,10 +314,13 @@ Deno.serve(async (req) => {
     if (cron) {
       if (cron !== await getSecret("cron_secret")) return json({ error: "Proibido." }, 403);
       if (!(await getSecret("magazord_token"))) return json({ ok: true, skip: "sem credenciais" });
+      if (b.action === "probe") return json(await testar());
+      if (b.action === "sync") return json(await sync("Manual"));
+      if (b.action === "detalhe") return json(await detalhar());
       const regras = await getCfg("regras"), ult = await getCfg("magazord_sync");
       const freq = Math.max(5, Number(regras.freq) || 15) * 60e3;
-      if (ult.last && Date.now() - ult.last < freq - 30e3) return json({ ok: true, skip: "ainda não" });
-      return json(await sync("Automática"));
+      if (!ult.last || Date.now() - ult.last >= freq - 30e3) return json(await sync("Automática"));
+      return json(await detalhar());
     }
     const me = await quem(req);
     if (!me) return json({ error: "Entre de novo para continuar." }, 401);
@@ -244,7 +344,7 @@ Deno.serve(async (req) => {
       const ok = out.rotas.filter((r: Obj) => r.ok).map((r: Obj) => r.nome), nao = out.rotas.filter((r: Obj) => !r.ok).map((r: Obj) => `${r.nome} (${r.status || "sem resposta"})`);
       return json({ ok: ok.length > 0, liberadas: ok, bloqueadas: nao });
     }
-    if (b.action === "sync") return json(await sync("Manual"));
+    if (b.action === "sync") { const r = await sync("Manual"); const d = await detalhar(30e3); return json({ ...r, detalhados: d.feitos }); }
     return json({ error: "Ação inválida." }, 400);
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
