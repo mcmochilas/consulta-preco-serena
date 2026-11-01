@@ -78,6 +78,16 @@ button{cursor:pointer}
 .scan-sub{display:block;font-size:12px;font-weight:500;color:#B7CAD4;margin-top:3px}
 .dk-inp{background:#164C64;border-color:#3C6E86;color:#F7F4EF;font-family:var(--mono);letter-spacing:.04em}
 .dk-inp::placeholder{color:#93A9B5}
+.sug{display:flex;flex-direction:column;background:#F7F4EF;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.28);margin-top:4px}
+.sug:empty{display:none}
+.sug button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid #E6E1D8;background:transparent;padding:8px 12px;min-height:56px;color:#0F3A4E;font:inherit}
+.sug button:last-child{border-bottom:0}
+.sug button:active,.sug button[aria-selected="true"]{background:#EDE6D9}
+.sug img,.sug .ph{flex:0 0 40px;width:40px;height:40px;border-radius:8px;background:#fff;object-fit:contain;border:1px solid #E6E1D8}
+.sug .t{font-size:14px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sug .s{font-size:12px;color:#5B6B73}
+.sug .p{margin-left:auto;font-size:14px;font-weight:700;white-space:nowrap;padding-left:6px}
+.sug .vazio{padding:14px 12px;font-size:14px;color:#5B6B73}
 .rec-img{flex:0 0 44px;width:44px;height:44px;border-radius:10px;background:#fff;object-fit:contain;display:block}
 .rec{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#164C64;border:0;border-radius:14px;padding:10px 12px;min-height:58px;color:#F7F4EF}
 .sw{width:22px;height:22px;border-radius:999px;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
@@ -415,11 +425,12 @@ function renderVendedor(){
       </div>
       <input type="file" id="camFile" accept="image/*" capture="environment" hidden>
       <form id="eanForm" style="display:flex;flex-direction:column;gap:6px;margin:0">
-        <label for="eanIn" style="font-size:12px;color:#B7CAD4;font-weight:600">Ou digite o código</label>
+        <label for="eanIn" style="font-size:12px;color:#B7CAD4;font-weight:600">Ou digite o EAN, SKU ou nome do puxador</label>
         <div style="display:flex;gap:8px">
-          <input class="inp dk-inp" id="eanIn" inputmode="numeric" placeholder="789…" maxlength="13" autocomplete="off" style="flex:1;min-width:0">
+          <input class="inp dk-inp" id="eanIn" type="search" enterkeyhint="search" placeholder="Ex.: 789…, 10777, Shell dourado" value="${esc(V.q || "")}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" role="combobox" aria-autocomplete="list" aria-controls="sug" aria-expanded="false" style="flex:1;min-width:0;font-family:var(--body);letter-spacing:0">
           <button class="btn" type="submit" style="background:#F7F4EF;color:#0F3A4E;border:0">Buscar</button>
         </div>
+        <div class="sug" id="sug" role="listbox" aria-label="Sugestões"></div>
       </form>
       ${V.nf ? `<div class="nf" role="alert"><b>${esc(V.nf.titulo)}</b><span>${V.nf.html}</span></div>` : ""}
       ${api.test ? `<button class="btn btn-sm" data-act="simular" style="background:transparent;color:#FFD195;border:1px dashed #8C7A55;align-self:flex-start">Simular leitura de um mostruário</button>` : ""}
@@ -435,7 +446,8 @@ function renderVendedor(){
   </div>`;
   const inp = $("#eanIn");
   if(matchMedia("(pointer:fine)").matches) inp.focus();
-  $("#eanForm").onsubmit = e => { e.preventDefault(); buscar(inp.value); };
+  $("#eanForm").onsubmit = e => { e.preventDefault(); enviarBusca(inp.value); };
+  if(V.q) mostraSug(V.sugs || [], V.q);
   $("#camFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) lerFoto(f); };
   cameraNaTela();
   fotosRecentes(rec);
@@ -571,6 +583,36 @@ function bipe(ok){
     if(ok) tom(2400, 0, 0.12);
     else { tom(420, 0, 0.14); tom(320, 0.18, 0.2); }
   }catch(e){}
+}
+
+/* ---------- busca por nome ou SKU com sugestões enquanto digita ---------- */
+let sugT, sugN = 0;
+const soDigitos = q => /^\d{8,14}$/.test(q.replace(/\s/g, ""));
+async function sugerir(){
+  const q = (V.q || "").trim(), meu = ++sugN;
+  if(q.length < 2){ V.sugs = []; return mostraSug([], q); }
+  try{ const r = await api.buscarTexto(q); if(meu !== sugN) return; V.sugs = r; mostraSug(r, q); }catch(e){}
+}
+function mostraSug(lista, q){
+  const box = $("#sug"), inp = $("#eanIn"); if(!box) return;
+  q = (q || "").trim();
+  if(q.length < 2 || (soDigitos(q) && !lista.length)){ box.innerHTML = ""; if(inp) inp.setAttribute("aria-expanded", "false"); return; }
+  const cfg = api.config();
+  box.innerHTML = lista.length ? lista.map(v => { const p = precoDe(v, cfg);
+    return `<button type="button" role="option" data-act="sug" data-id="${esc(v.id)}">
+      ${v.fotos && v.fotos[0] ? `<img src="${esc(v.fotos[0])}" alt="" loading="lazy" decoding="async">` : `<span class="ph"></span>`}
+      <span style="display:flex;flex-direction:column;min-width:0;gap:2px"><span class="t">${esc(v.titulo)}</span><span class="s">${esc([v.sku, v.cor, v.tam].filter(Boolean).join(" · "))} · estoque ${v.total}</span></span>
+      <span class="p">${brl(p.valor)}</span></button>`; }).join("")
+    : `<div class="vazio">Nada encontrado para “${esc(q)}”.</div>`;
+  if(inp) inp.setAttribute("aria-expanded", lista.length ? "true" : "false");
+}
+async function enviarBusca(q){
+  q = String(q || "").trim(); if(!q) return;
+  if(soDigitos(q)){ V.q = ""; V.sugs = []; return buscar(q); }
+  clearTimeout(sugT); V.q = q;
+  const r = await api.buscarTexto(q); V.sugs = r;
+  if(r.length === 1){ V.q = ""; V.sugs = []; return abrirVar(await api.variacao(r[0].id)); }
+  mostraSug(r, q);
 }
 
 async function buscar(code){
@@ -1005,6 +1047,7 @@ document.addEventListener("click", async e => {
     case "cam-foto": $("#camFile").click(); break;
     case "cam-luz": luzCamera(); break;
     case "abrir": { const v = await api.variacao(el.dataset.id); if(v) abrirVar(v); break; }
+    case "sug": { V.q = ""; V.sugs = []; const v = await api.variacao(el.dataset.id); if(v) abrirVar(v); break; }
     case "voltar": V.screen = "scanner"; V.nf = null; renderVendedor(); window.scrollTo(0,0); break;
     case "filtro": V.filtro = el.dataset.f; renderProduto(); break;
     case "sort": { const k = el.dataset.k; V.sort = V.sort.k === k ? { k, dir: -V.sort.dir } : { k, dir:1 }; renderProduto(); break; }
@@ -1042,7 +1085,7 @@ document.addEventListener("change", async e => {
 let buscaT;
 document.addEventListener("input", e => {
   if(e.target.id === "busca"){ A.busca = e.target.value; (A.pg ||= {}).prod = 1; clearTimeout(buscaT); buscaT = setTimeout(async () => { const pos = e.target.selectionStart; await renderAdmin(); const b = $("#busca"); if(b){ b.focus(); b.setSelectionRange(pos, pos); } }, 250); }
-  if(e.target.id === "eanIn") e.target.value = e.target.value.replace(/\D/g, "");
+  if(e.target.id === "eanIn"){ V.q = e.target.value; clearTimeout(sugT); sugT = setTimeout(sugerir, 220); }
 });
 document.addEventListener("submit", async e => {
   const f = e.target;

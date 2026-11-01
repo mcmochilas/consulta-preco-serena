@@ -181,6 +181,15 @@
     },
     // admin: corrige o modelo de algumas variações (vazio = volta ao automático pelo título)
     async definirModelo(ids, modelo){ const n = ok(await sb.rpc("definir_modelo", { p_ids:ids, p_modelo:modelo || "" })); C.prods = null; return n; },
+    // busca por nome, SKU ou EAN: cada palavra precisa aparecer (sem diferenciar acento/maiúscula)
+    async buscarTexto(q){
+      const pal = String(q || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[%_,()*\\]/g, " ").split(/\s+/).filter(Boolean).slice(0, 6);
+      if(!pal.length) return [];
+      let b = sb.from("variacoes").select(VCOLS).eq("ativo", true);
+      pal.forEach(w => { b = b.ilike("busca", "%" + w + "%"); });
+      const rows = ok(await b.order("estoque", { ascending:false }).order("titulo").limit(8));
+      return rows.map(r => view(r));
+    },
     variacaoInfo(id){ return C.vars.get(id) || null; },
 
     /* ---------- admin: produtos e EANs ---------- */
