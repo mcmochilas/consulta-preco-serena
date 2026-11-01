@@ -237,6 +237,7 @@ body.dragging{cursor:grabbing}
 .ck input{width:18px;height:18px;accent-color:var(--ink)}
 .tbox{background:var(--surface);border-radius:16px;overflow-x:auto}
 .t{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+.t th.r,.t td.r{text-align:right}
 .t th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
 .t td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}
 .t tr.sel td{background:#F7F2E8}
@@ -686,6 +687,17 @@ const TABS = [["integ","Integração Magazord"],["prod","Produtos e EANs"],["pre
 const statusOf = v => !v.ean ? "Sem EAN" : !v.imagens ? "Sem imagem" : v.total === 0 ? "Sem estoque" : "Ok";
 const TAG = { "Ok":"tag-ok", "Sem EAN":"tag-warn", "Sem imagem":"tag-acc", "Sem estoque":"tag-off" };
 
+// abre a aba na hora com o que já está carregado e atualiza os dados por trás; redesenha só se nada estiver sendo editado
+let admAtual = 0;
+async function atualizaAdmin(){
+  const meu = ++admAtual, tab = S.adminTab;
+  try{
+    await Promise.all([api.recarregar({ status: tab === "integ" }), tab === "prod" || tab === "integ" ? api.produtos(true) : null]);
+  }catch(e){ return; }
+  if(meu !== admAtual || S.adminTab !== tab || S.asVendedor || !document.querySelector(".painel")) return;
+  if(document.querySelector(".dlg, dialog[open], .modal") || (document.activeElement && document.activeElement.matches("input,textarea,select")) || A.editId) return;
+  const y = window.scrollY; await renderAdmin(); window.scrollTo(0, y);
+}
 async function renderAdmin(){
   const topo = !document.querySelector(".painel");
   const prods = await api.produtos();
@@ -997,7 +1009,7 @@ document.addEventListener("click", async e => {
     case "prev": setSlide(V.slide - 1); break;
     case "next": setSlide(V.slide + 1); break;
     case "slide": setSlide(+el.dataset.i); break;
-    case "tab": S.adminTab = el.dataset.t; store.set("cp-admin-tab", S.adminTab); A.testMsg = null; await api.recarregar().catch(() => {}); renderAdmin(); break;
+    case "tab": S.adminTab = el.dataset.t; store.set("cp-admin-tab", S.adminTab); A.testMsg = null; await renderAdmin(); atualizaAdmin(); break;
     case "sync": A.syncing = true; renderAdmin(); { const r = await api.sincronizar(); A.syncing = false; toast(r.ok ? "Sincronizado · " + r.itens + " variações" : "Sincronização com erro: " + r.res); renderAdmin(); } break;
     case "opt": { const k = el.dataset.k, c = api.config(); await api.salvarConfig({ [k]: !c[k] }); renderAdmin(); break; }
     case "copy-wh": A.copied = await copy(api.config().webhook); if(!A.copied) toast("Não foi possível copiar aqui. Selecione o texto."); renderAdmin(); setTimeout(() => { A.copied = false; }, 2000); break;

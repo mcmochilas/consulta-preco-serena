@@ -77,7 +77,9 @@
     const q = sb.from("variacoes").select("titulo,produto_nome,tamanho").eq("ativo", true).limit(500);
     return ok(await (r.modelo ? q.eq("modelo", r.modelo) : q.eq("produto_id", r.produto_id)));
   }
-  async function carregar(){
+  // só as colunas que a tela usa (a coluna "raw" com o JSON da Magazord é pesada)
+  const VCOLS = "id,produto_id,produto_nome,titulo,cor,tamanho,linha,sku,ean,preco,preco_promo,estoque,imagens,modelo,ativo";
+  async function carregar(op = {}){
     const adm = C.me.role === "admin";
     const jobs = [
       sb.from("config").select("id,data").then(ok).then(rows => { rows.forEach(x => { if(x.id === "regras") C.regras = { ...C.regras, ...x.data }; if(x.id === "magazord_sync") C.mz.sync = x.data; }); }),
@@ -87,8 +89,9 @@
     if(adm) jobs.push(
       sb.from("profiles").select("*").order("name").then(ok).then(rows => { C.perfis.clear(); rows.forEach(x => C.perfis.set(x.id, x)); }),
       sb.from("consultas").select("at,user_id,ean,var_id,preco,estoque").order("at", { ascending:false }).limit(1000).then(ok).then(rows => { C.consultas = rows.map(x => ({ at:ms(x.at), user:x.user_id, ean:x.ean, varId:x.var_id, preco:x.preco == null ? null : Number(x.preco), estoque:x.estoque == null ? null : Number(x.estoque) })); }),
-      sb.from("sync_log").select("*").order("at", { ascending:false }).limit(60).then(ok).then(rows => { C.hist = rows.map(x => ({ at:ms(x.at), origem:x.origem, itens:x.itens, res:x.res })); }),
-      fn("magazord", { action:"status" }).then(s => { C.mz = { ...C.mz, ...s }; }).catch(() => {})
+      sb.from("sync_log").select("at,origem,itens,res").order("at", { ascending:false }).limit(60).then(ok).then(rows => { C.hist = rows.map(x => ({ at:ms(x.at), origem:x.origem, itens:x.itens, res:x.res })); }),
+      // status da Magazord passa pela função do servidor (mais lenta): só quando a tela de integração pede
+      ...(op.status === false ? [] : [fn("magazord", { action:"status" }).then(s => { C.mz = { ...C.mz, ...s }; }).catch(() => {})])
     );
     await Promise.all(jobs);
   }
@@ -146,7 +149,7 @@
       return clone(C.me);
     },
     logout(){ sb.auth.signOut(); C.me = null; if(canal){ sb.removeChannel(canal); canal = null; } },
-    async recarregar(){ if(C.me) await carregar(); },
+    async recarregar(op){ if(C.me) await carregar(op); },
     config(){
       return { ...C.regras, tabela:"varejo", dep:{ loja:false, cd:true }, separar:false,
         api:{ url:C.mz.url || "", user:C.mz.token || "", pass:C.mz.senha ? "••••••••" : "", ok:!!C.mz.configured }, webhook:C.mz.webhook || "" };
@@ -162,18 +165,18 @@
     async buscarEAN(ean){
       ean = String(ean).replace(/\D/g, "");
       const cands = [...new Set([ean, ean.replace(/^0+/, ""), ean.length < 13 ? ean.padStart(13, "0") : ean])].filter(Boolean);
-      let r = (ok(await sb.from("variacoes").select("*").in("ean", cands).eq("ativo", true).limit(1)) || [])[0];
-      if(!r && C.aliases[ean]) r = ok(await sb.from("variacoes").select("*").eq("id", C.aliases[ean]).maybeSingle());
-      if(!r){ const a = ok(await sb.from("aliases").select("var_id").eq("ean", ean).maybeSingle()); if(a) r = ok(await sb.from("variacoes").select("*").eq("id", a.var_id).maybeSingle()); }
+      let r = (ok(await sb.from("variacoes").select(VCOLS).in("ean", cands).eq("ativo", true).limit(1)) || [])[0];
+      if(!r && C.aliases[ean]) r = ok(await sb.from("variacoes").select(VCOLS).eq("id", C.aliases[ean]).maybeSingle());
+      if(!r){ const a = ok(await sb.from("aliases").select("var_id").eq("ean", ean).maybeSingle()); if(a) r = ok(await sb.from("variacoes").select(VCOLS).eq("id", a.var_id).maybeSingle()); }
       sb.from("consultas").insert({ user_id:C.me.id, ean, var_id:r ? r.id : null, preco:r ? r.preco : null, estoque:r ? Math.max(0, Number(r.estoque) || 0) : null }).then(() => {});
       if(!r) return null;
       return view(r, tamsDe(await irmaosDe(r)));
     },
-    async variacao(id){ const r = ok(await sb.from("variacoes").select("*").eq("id", id).maybeSingle()); if(!r) return null; return view(r, tamsDe(await irmaosDe(r))); },
+    async variacao(id){ const r = ok(await sb.from("variacoes").select(VCOLS).eq("id", id).maybeSingle()); if(!r) return null; return view(r, tamsDe(await irmaosDe(r))); },
     // todas as variações do mesmo modelo (agrupadas pelo nome do modelo no título)
     async variacoesDe(chave){
-      let rows = ok(await sb.from("variacoes").select("*").eq("modelo", chave).eq("ativo", true).limit(500));
-      if(!rows.length) rows = ok(await sb.from("variacoes").select("*").eq("produto_id", chave).eq("ativo", true));
+      let rows = ok(await sb.from("variacoes").select(VCOLS).eq("modelo", chave).eq("ativo", true).limit(500));
+      if(!rows.length) rows = ok(await sb.from("variacoes").select(VCOLS).eq("produto_id", chave).eq("ativo", true));
       const t = tamsDe(rows); return rows.map(r => view(r, t));
     },
     // admin: corrige o modelo de algumas variações (vazio = volta ao automático pelo título)
@@ -183,7 +186,9 @@
     /* ---------- admin: produtos e EANs ---------- */
     async produtos(force){
       if(C.prods && !force) return C.prods;
-      const all = []; for(let from = 0; ; from += 1000){ const rows = ok(await sb.from("variacoes").select("*").eq("ativo", true).order("titulo").range(from, from + 999)); all.push(...rows); if(rows.length < 1000) break; }
+      // busca as páginas em paralelo (2 de cada vez) em vez de uma depois da outra
+      const pag = from => sb.from("variacoes").select(VCOLS).eq("ativo", true).order("titulo").order("id").range(from, from + 999).then(ok);
+      const all = []; for(let from = 0; ; from += 2000){ const [a, b] = await Promise.all([pag(from), pag(from + 1000)]); all.push(...a, ...b); if(b.length < 1000) break; }
       const porProd = {}; all.forEach(r => (porProd[r.modelo || r.produto_id] ||= []).push(r));
       C.prods = all.map(r => { const v = view(r, tamsDe(porProd[r.modelo || r.produto_id])); const al = Object.entries(C.aliases).filter(([, id]) => id === v.id).map(([e]) => e); if(!v.ean && al[0]){ v.ean = al[0]; v.eanLocal = true; } return v; });
       return C.prods;
