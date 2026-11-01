@@ -126,8 +126,11 @@ button{cursor:pointer}
 .pill{height:38px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:600;background:var(--surface);color:var(--ink2);border:1px solid #D6D3CC}
 .pill[aria-pressed="true"]{background:var(--ink);color:#F7F4EF;border-color:var(--ink)}
 .vh button{border:0;background:none;padding:0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit;display:flex;align-items:center;gap:3px;min-height:36px;width:100%}
-.vh{display:grid;grid-template-columns:1.55fr .8fr 1.05fr .75fr;gap:8px;padding:2px 16px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid #ECEAE5}
-.vr{display:grid;grid-template-columns:1.55fr .8fr 1.05fr .75fr;gap:8px;align-items:center;width:100%;min-height:54px;padding:0 16px;border:0;border-bottom:1px solid #F0EEEA;background:var(--surface);text-align:left;font-size:14px}
+.vh button .sa{width:10px}
+.vh button.dir{position:relative;justify-self:end;width:auto}
+.vh button.dir .sa{position:absolute;left:100%;margin-left:1px;width:auto}
+.vh{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,.8fr) minmax(0,1.05fr) minmax(0,.75fr);gap:8px;padding:2px 16px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid #ECEAE5}
+.vr{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,.8fr) minmax(0,1.05fr) minmax(0,.75fr);gap:8px;align-items:center;width:100%;min-height:54px;padding:0 16px;border:0;border-bottom:1px solid #F0EEEA;background:var(--surface);text-align:left;font-size:14px}
 .vr[aria-current="true"]{background:var(--accent-soft)}
 .vr .c{display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
 .vr .c span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -664,7 +667,7 @@ function renderProduto(){
   if(V.sort.k){ const key = { cor:x => x.cor, tam:x => x.ti, preco:x => precoDe(x, cfg).valor, estoque:x => x.total }[V.sort.k];
     list = list.slice().sort((a, b) => { const A1 = key(a), B1 = key(b); const r = typeof A1 === "string" ? A1.localeCompare(B1, "pt-BR") : A1 - B1; return (r || a.ti - b.ti) * V.sort.dir; }); }
   const th = (k, l, right) => { const on = V.sort.k === k, arrow = on ? (V.sort.dir > 0 ? "↑" : "↓") : "";
-    return `<button data-act="sort" data-k="${k}" aria-sort="${on ? (V.sort.dir > 0 ? "ascending" : "descending") : "none"}" aria-label="Ordenar por ${l}" style="${right ? "justify-content:flex-end;" : ""}${on ? "color:var(--ink)" : ""}">${l}<span aria-hidden="true" style="width:10px">${arrow}</span></button>`; };
+    return `<button data-act="sort" data-k="${k}" aria-sort="${on ? (V.sort.dir > 0 ? "ascending" : "descending") : "none"}" aria-label="Ordenar por ${l}" class="${right ? "dir" : ""}" style="${on ? "color:var(--ink)" : ""}">${l}<span class="sa" aria-hidden="true">${arrow}</span></button>`; };
   const n = v.imagens;
   $("#app").innerHTML = `<div class="vd">
     <div class="ptop">
