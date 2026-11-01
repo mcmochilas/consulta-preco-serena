@@ -535,7 +535,7 @@ function renderProduto(){
       </div>
       <div class="card" style="padding:16px 0 6px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 16px">
-          <h2 style="margin:0;font-family:var(--display);font-weight:600;font-size:17px">Variações</h2>
+          <h2 style="margin:0;font-family:var(--display);font-weight:600;font-size:17px">Variações${v.modelo ? ` <span class="muted" style="font-family:var(--ui);font-weight:600;font-size:13px">· modelo ${esc(v.modelo)}</span>` : ""}</h2>
           <span class="muted">${list.length} de ${V.list.length}</span>
         </div>
         <div class="pills" style="padding:12px 16px 10px">
@@ -675,7 +675,7 @@ function admInteg(prods, pend, sync){
 function admProd(prods){
   const q = A.busca.toLowerCase();
   const map = { todos:null, ean:"Sem EAN", img:"Sem imagem", est:"Sem estoque" };
-  const rowsAll = prods.filter(v => (!map[A.filtro] || statusOf(v) === map[A.filtro]) && (!q || (v.titulo+" "+v.sku+" "+v.ean+" "+v.cor+" "+v.tam).toLowerCase().includes(q)));
+  const rowsAll = prods.filter(v => (!map[A.filtro] || statusOf(v) === map[A.filtro]) && (!q || (v.titulo+" "+v.modelo+" "+v.sku+" "+v.ean+" "+v.cor+" "+v.tam).toLowerCase().includes(q)));
   const pR = pagina(rowsAll, "prod"), rows = pR.items;
   const nSel = Object.keys(A.sel).length;
   return `<header class="hdr">
@@ -683,7 +683,7 @@ function admProd(prods){
       <button class="btn btn-dark" data-act="etiquetas">${nSel ? "Gerar etiquetas (" + nSel + ")" : "Gerar etiquetas EAN"}</button>
     </header>
     <div class="toolbar">
-      <div class="fld" style="flex:1 1 260px"><label for="busca">Buscar por nome, SKU ou EAN</label><input class="inp" id="busca" value="${esc(A.busca)}" placeholder="Ex.: Barra Slim, BS-320, 7899…"></div>
+      <div class="fld" style="flex:1 1 260px"><label for="busca">Buscar por nome, modelo, SKU ou EAN</label><input class="inp" id="busca" value="${esc(A.busca)}" placeholder="Ex.: Barra Slim, BS-320, 7899…"></div>
       <div class="pills">${[["todos","Todos"],["ean","Sem EAN"],["img","Sem imagem"],["est","Sem estoque"]].map(([k,l]) => {
         const n = k === "todos" ? prods.length : prods.filter(v => statusOf(v) === map[k]).length;
         return `<button class="pill" style="height:42px" data-act="pfiltro" data-f="${k}" aria-pressed="${A.filtro===k}">${l} <span style="opacity:.7">${n}</span></button>`; }).join("")}</div>
@@ -693,7 +693,8 @@ function admProd(prods){
       <tbody>${rows.map(v => { const s = statusOf(v), sel = !!A.sel[v.id], ed = A.editId === v.id;
         return `<tr class="${sel ? "sel" : ""}">
           <td><input type="checkbox" data-act="sel" data-id="${esc(v.id)}" ${sel ? "checked" : ""} ${v.ean ? "" : "disabled"} aria-label="Selecionar ${esc(v.sku)}" style="width:18px;height:18px;accent-color:var(--ink)"></td>
-          <td style="font-weight:600">${esc(v.titulo)}</td>
+          <td><div style="font-weight:600">${esc(v.titulo)}</div>
+            <button class="btn btn-sm" data-act="modelo" data-id="${esc(v.id)}" title="Variações do mesmo modelo aparecem juntas no app" style="height:26px;margin-top:6px;padding:0 10px;font-size:12px;font-weight:600">Modelo: ${esc(v.modelo || "—")} <span aria-hidden="true">✎</span></button></td>
           <td>${v.cor || v.tam ? `<span style="display:inline-flex;align-items:center;gap:8px"><span class="sw" style="width:14px;height:14px;background:${esc(v.hex)}"></span>${esc([v.cor, v.tam].filter(Boolean).join(" · "))}</span>` : `<span class="muted">—</span>`}</td>
           <td class="mono">${esc(v.sku)}</td>
           <td class="nw">${ed ? `<form data-ean-form="${esc(v.id)}" style="display:flex;gap:6px"><input class="inp mono" name="ean" value="${esc(v.ean)}" maxlength="13" inputmode="numeric" style="width:150px;height:36px" aria-label="EAN de ${esc(v.sku)}"><button class="btn btn-sm btn-dark" type="submit">Salvar</button><button class="btn btn-sm" type="button" data-act="ean-cancel">Cancelar</button></form>`
@@ -821,6 +822,23 @@ async function modalVincular(ean){
     </form>`);
   $("#fVinc").onsubmit = async e => { e.preventDefault(); await api.vincular(ean, $("#vSel").value); closeModal(); toast("Código vinculado"); renderAdmin(); };
 }
+function modalModelo(id, err){
+  const v = (api.produtosCache() || []).find(x => x.id === id); if(!v) return;
+  const irmaos = (api.produtosCache() || []).filter(x => x.modelo && x.modelo === v.modelo);
+  modal(`<h2>Modelo do puxador</h2>
+    ${err ? `<div class="err" role="alert">${esc(err)}</div>` : ""}
+    <p class="hint" style="margin:0">${esc(v.titulo)}</p>
+    <form id="fMod" style="display:flex;flex-direction:column;gap:14px">
+      <div class="fld"><label for="mdN">Modelo (no app, aparecem juntas todas as variações com o mesmo modelo)</label><input class="inp" id="mdN" value="${esc(v.modelo)}" autocomplete="off"></div>
+      ${irmaos.length > 1 ? `<label style="display:flex;gap:10px;align-items:center;font-weight:600"><input type="checkbox" id="mdT" style="width:18px;height:18px;accent-color:var(--ink)"> Aplicar às ${irmaos.length} variações do modelo ${esc(v.modelo)}</label>` : ""}
+      <p class="hint">O modelo sai automático do título (ex.: "Puxador Concha Shell 64mm Gold" vira Shell). Deixe em branco para voltar ao automático.</p>
+      <div class="dlg-act"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn btn-dark" type="submit">Salvar modelo</button></div>
+    </form>`);
+  $("#fMod").onsubmit = async e => { e.preventDefault();
+    const ids = $("#mdT") && $("#mdT").checked ? irmaos.map(x => x.id) : [id];
+    try{ const n = await api.definirModelo(ids, $("#mdN").value.trim()); closeModal(); toast(n > 1 ? `Modelo salvo em ${n} variações` : "Modelo salvo"); await api.produtos(true); renderAdmin(); }
+    catch(x){ modalModelo(id, x.message); } };
+}
 function modalPin(id, err){
   const u = api.usuarios().find(x => x.id === id); if(!u) return;
   modal(`<h2>Novo PIN · ${esc(u.name)}</h2>
@@ -880,6 +898,7 @@ document.addEventListener("click", async e => {
     case "selall": { const prods = await api.produtos(); const all = prods.filter(v => v.ean); if(Object.keys(A.sel).length >= all.length) A.sel = {}; else all.forEach(v => A.sel[v.id] = true); renderAdmin(); break; }
     case "ean-edit": A.editId = el.dataset.id; await renderAdmin(); { const i = document.querySelector("[data-ean-form] input"); if(i){ i.focus(); i.select(); } } break;
     case "ean-cancel": A.editId = null; renderAdmin(); break;
+    case "modelo": await api.produtos(); modalModelo(el.dataset.id); break;
     case "etiquetas": modalEtiquetas(); break;
     case "etq-pdf": etiquetasPDF(el); break;
     case "copy-eans": toast(await copy(el.dataset.list) ? "Lista copiada" : "Não foi possível copiar aqui"); break;

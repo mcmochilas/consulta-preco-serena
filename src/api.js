@@ -19,12 +19,34 @@
   const hexDe = cor => (CORES.find(([re]) => re.test(cor || "")) || [0, "#C9C6BE"])[1];
   const numTam = t => { const m = String(t || "").replace(",", ".").match(/[\d.]+/); return m ? parseFloat(m[0]) * (/\bm\b|metro/i.test(t) && !/mm/i.test(t) ? 1000 : 1) : 1e9; };
 
+  /* ---------- modelo, cor e tamanho a partir do título ----------
+     Na Magazord cada acabamento/medida costuma ser um anúncio separado (pai + filho).
+     O banco calcula o modelo pelo título (coluna "modelo", ex.: "Puxador Concha Shell 64mm Gold" -> Shell)
+     e a tela agrupa por ele. Cor e tamanho saem do título quando a derivação vem como "Único". */
+  const COR_PALAVRA = /^(pret[oa]|dourad[oa]|gold|n[ií]quel|cromad[oa]|cromo|ros[eé]|rosa|bronze|branc[oa]|escovad[oa]|[oô]nix|grafite|cobre|[aâ]mbar|menta|antique|fosc[oa]|acetinad[oa]|ouro|inox|champagne|prata|tit[aâ]nio|verde|azul|cinza|nude|vecchio|vechio|bege|marrom|azal[eé]ia|a[cç]o|matte|polido|opaco|lat[aã]o|vermelh[oa]|amarel[oa]|natural|madeira|couro|chumbo|caramelo|off|baby|velho|real|vintage|grafit|mettalo|metalo)$/i;
+  const MEDIDA = /^(\d+([.,]\d+)?(mm|cm)|\d+x\d+(mm)?)$/i, LETRA = /^(pp|p|m|g|gg|mini)$/i, CODIGO = /^((il|zp|ba|df)[\d.]+[a-z]?|\d+)$/i;
+  const toksDe = t => String(t || "").split(" - ")[0].replace(/[()]/g, " ").split(/\s+/).filter(Boolean);
+  function tamDoTitulo(r){
+    const tk = toksDe(r.titulo || r.produto_nome);
+    const med = tk.find(x => MEDIDA.test(x)); if(med) return med.toUpperCase();
+    const der = String(r.tamanho || "").trim(); if(der && !/^(único|unico|ponto|u)$/i.test(der)) return der.toUpperCase();
+    const l = tk.find(x => LETRA.test(x)); if(l) return l.toUpperCase();
+    return /\bponto\b/i.test(r.titulo || "") || /^ponto$/i.test(der) ? "Ponto" : "";
+  }
+  function corDoTitulo(r){
+    if(r.cor && !/^(único|unico)$/i.test(r.cor)) return r.cor;
+    const tk = toksDe(r.titulo || r.produto_nome), i = tk.findIndex(x => COR_PALAVRA.test(x));
+    if(i < 0) return "";
+    return tk.slice(i).filter(x => !CODIGO.test(x) && !MEDIDA.test(x) && !LETRA.test(x)).join(" ").replace(/^\w/, c => c.toUpperCase());
+  }
+
   /* ---------- estado em memória (a tela lê daqui sem esperar) ---------- */
   const C = { me:null, regras:{ baixo:5, semEstoque:true, promo:true, freq:"15" }, mz:{}, pre:new Map(), perfis:new Map(), consultas:[], aliases:{}, hist:[], vars:new Map(), prods:null };
 
   function view(r, tams){
-    const v = { id:r.id, prod:r.produto_id, nome:r.produto_nome || r.titulo, titulo:r.titulo || r.produto_nome, linha:r.linha || "",
-      cor:r.cor || "", tam:r.tamanho || "", sku:r.sku || r.id, ean:r.ean || "", hex:hexDe(r.cor || r.titulo),
+    const cor = corDoTitulo(r);
+    const v = { id:r.id, prod:r.modelo || r.produto_id, modelo:r.modelo || "", nome:r.produto_nome || r.titulo, titulo:r.titulo || r.produto_nome, linha:r.linha || "",
+      cor, tam:tamDoTitulo(r), sku:r.sku || r.id, ean:r.ean || "", hex:hexDe(cor || r.titulo),
       preco:{ varejo:Number(r.preco) || 0, promo: r.preco_promo != null && Number(r.preco_promo) > 0 && Number(r.preco_promo) < Number(r.preco) ? Number(r.preco_promo) : null },
       estoque:{ cd:Number(r.estoque) || 0 }, total:Number(r.estoque) || 0, fotos:Array.isArray(r.imagens) ? r.imagens : [], ti:0, nTams:1 };
     v.imagens = v.fotos.length;
@@ -32,7 +54,7 @@
     C.vars.set(v.id, v);
     return v;
   }
-  const tamsDe = rows => [...new Set(rows.map(r => r.tamanho || ""))].sort((a, b) => numTam(a) - numTam(b) || a.localeCompare(b));
+  const tamsDe = rows => [...new Set(rows.map(tamDoTitulo))].sort((a, b) => numTam(a) - numTam(b) || a.localeCompare(b));
   function preRow(r){
     const p = { id:r.id, num:r.num, user:r.user_id, cliente:r.cliente, telefone:r.telefone || "", obs:r.obs || "", status:r.status, ambientes:r.ambientes || [],
       itens:Array.isArray(r.itens) ? r.itens : [], erpNum:r.erp_num || "", createdAt:ms(r.created_at), updatedAt:ms(r.updated_at) };
@@ -49,6 +71,10 @@
   }
   const ok = ({ data, error }) => { if(error) throw new Error(error.message); return data; };
 
+  async function irmaosDe(r){
+    const q = sb.from("variacoes").select("titulo,produto_nome,tamanho").eq("ativo", true).limit(500);
+    return ok(await (r.modelo ? q.eq("modelo", r.modelo) : q.eq("produto_id", r.produto_id)));
+  }
   async function carregar(){
     const adm = C.me.role === "admin";
     const jobs = [
@@ -139,19 +165,25 @@
       if(!r){ const a = ok(await sb.from("aliases").select("var_id").eq("ean", ean).maybeSingle()); if(a) r = ok(await sb.from("variacoes").select("*").eq("id", a.var_id).maybeSingle()); }
       sb.from("consultas").insert({ user_id:C.me.id, ean, var_id:r ? r.id : null, preco:r ? r.preco : null }).then(() => {});
       if(!r) return null;
-      const irmaos = ok(await sb.from("variacoes").select("tamanho").eq("produto_id", r.produto_id).eq("ativo", true));
-      return view(r, tamsDe(irmaos));
+      return view(r, tamsDe(await irmaosDe(r)));
     },
-    async variacao(id){ const r = ok(await sb.from("variacoes").select("*").eq("id", id).maybeSingle()); if(!r) return null; const irm = ok(await sb.from("variacoes").select("tamanho").eq("produto_id", r.produto_id).eq("ativo", true)); return view(r, tamsDe(irm)); },
-    async variacoesDe(prodId){ const rows = ok(await sb.from("variacoes").select("*").eq("produto_id", prodId).eq("ativo", true)); const t = tamsDe(rows); return rows.map(r => view(r, t)); },
+    async variacao(id){ const r = ok(await sb.from("variacoes").select("*").eq("id", id).maybeSingle()); if(!r) return null; return view(r, tamsDe(await irmaosDe(r))); },
+    // todas as variações do mesmo modelo (agrupadas pelo nome do modelo no título)
+    async variacoesDe(chave){
+      let rows = ok(await sb.from("variacoes").select("*").eq("modelo", chave).eq("ativo", true).limit(500));
+      if(!rows.length) rows = ok(await sb.from("variacoes").select("*").eq("produto_id", chave).eq("ativo", true));
+      const t = tamsDe(rows); return rows.map(r => view(r, t));
+    },
+    // admin: corrige o modelo de algumas variações (vazio = volta ao automático pelo título)
+    async definirModelo(ids, modelo){ const n = ok(await sb.rpc("definir_modelo", { p_ids:ids, p_modelo:modelo || "" })); C.prods = null; return n; },
     variacaoInfo(id){ return C.vars.get(id) || null; },
 
     /* ---------- admin: produtos e EANs ---------- */
     async produtos(force){
       if(C.prods && !force) return C.prods;
       const all = []; for(let from = 0; ; from += 1000){ const rows = ok(await sb.from("variacoes").select("*").eq("ativo", true).order("titulo").range(from, from + 999)); all.push(...rows); if(rows.length < 1000) break; }
-      const porProd = {}; all.forEach(r => (porProd[r.produto_id] ||= []).push(r));
-      C.prods = all.map(r => { const v = view(r, tamsDe(porProd[r.produto_id])); const al = Object.entries(C.aliases).filter(([, id]) => id === v.id).map(([e]) => e); if(!v.ean && al[0]){ v.ean = al[0]; v.eanLocal = true; } return v; });
+      const porProd = {}; all.forEach(r => (porProd[r.modelo || r.produto_id] ||= []).push(r));
+      C.prods = all.map(r => { const v = view(r, tamsDe(porProd[r.modelo || r.produto_id])); const al = Object.entries(C.aliases).filter(([, id]) => id === v.id).map(([e]) => e); if(!v.ean && al[0]){ v.ean = al[0]; v.eanLocal = true; } return v; });
       return C.prods;
     },
     async definirEAN(varId, ean){
@@ -162,6 +194,7 @@
       C.aliases[ean] = varId; C.prods = null; return true;
     },
     async vincular(ean, varId){ ok(await sb.from("aliases").upsert({ ean, var_id:varId }, { onConflict:"ean" })); C.aliases[ean] = varId; return true; },
+    produtosCache(){ return C.prods; },
     resolvidos(){ return clone(C.aliases); },
     consultas(){ return clone(C.consultas); },
     sync(){ return { last:(C.mz.sync && C.mz.sync.last) || null, hist:clone(C.hist) }; },
