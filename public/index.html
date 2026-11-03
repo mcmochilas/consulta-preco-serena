@@ -294,7 +294,7 @@ body.dragging{cursor:grabbing}
 .dlg-act:not(:has(> :nth-child(3))) > .btn{flex:0 0 auto}
 .dlg-act:not(:has(> :nth-child(3))) > .btn-dark{flex:1 1 auto;min-width:0}
 .labels{display:flex;flex-wrap:wrap;gap:8px}
-.lab{width:30mm;height:20mm;box-sizing:border-box;border:1px dashed #C9C6BE;border-radius:4px;padding:1.2mm 0 .6mm;background:#fff;display:flex;align-items:center;justify-content:center}
+.lab{width:30mm;height:10mm;box-sizing:border-box;border:1px dashed #C9C6BE;border-radius:3px;padding:0;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .lab svg{width:100%;height:100%;display:block}
 @media (max-width:640px){#toast{bottom:auto!important;top:72px}}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:var(--petrol-d);color:#F7F4EF;padding:12px 18px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
@@ -353,11 +353,12 @@ function barcode(ean){
   bits += "01010";
   for(let i=7;i<=12;i++) bits += ER[d[i]];
   bits += "101";
-  const q = 9, w = 95 + q*2;
+  // mesma geometria do PDF: 1 unidade = 0,25 mm, etiqueta de 120 × 40 (30 × 10 mm)
+  const q = 12.5, top = 2.8;
   let rects = "";
-  for(let i=0;i<bits.length;i++) if(bits[i] === "1"){ const guard = i < 3 || (i >= 45 && i < 50) || i >= 92; rects += `<rect x="${q+i}" y="0" width="1" height="${guard ? 46 : 40}"/>`; }
-  const t = (x, s, len) => `<text x="${x}" y="54" font-family="JetBrains Mono,monospace" font-size="8"${len ? ` textLength="${len}" lengthAdjust="spacing"` : ""}>${s}</text>`;
-  return `<svg viewBox="0 0 ${w} 56" role="img" aria-label="Código de barras ${ean}"><g fill="#000">${rects}</g>${t(1, d[0])}${t(q+5, ean.slice(1,7), 37)}${t(q+52, ean.slice(7), 37)}</svg>`;
+  for(let i=0;i<bits.length;i++) if(bits[i] === "1"){ const guard = i < 3 || (i >= 45 && i < 50) || i >= 92; rects += `<rect x="${q+i}" y="${top}" width="1" height="${guard ? 29.2 : 26}"/>`; }
+  const t = (x, s, len, a) => `<text x="${x}" y="${top + 33}" font-family="Courier New,monospace" font-weight="700" font-size="7.6"${a ? ` text-anchor="${a}"` : ""}${len ? ` textLength="${len}" lengthAdjust="spacing"` : ""}>${s}</text>`;
+  return `<svg viewBox="0 0 120 40" role="img" aria-label="Código de barras ${ean}"><g fill="#000">${rects}</g>${t(q - 1.6, d[0], 0, "end")}${t(q + 4, ean.slice(1,7), 39)}${t(q + 51, ean.slice(7), 39)}</svg>`;
 }
 
 /* =====================================================================
@@ -960,7 +961,7 @@ async function modalEtiquetas(){
   if(!ids.length) ids = prods.filter(v => v.ean).map(v => v.id);
   const sel = prods.filter(v => ids.includes(v.id) && v.ean);
   modal(`<h2>Etiquetas EAN · ${sel.length}</h2>
-    <p class="hint">Etiqueta de 30 × 20 mm, só com o código de barras (no menor tamanho que os leitores aceitam). O PDF sai com uma etiqueta por página, no formato da impressora de etiquetas.</p>
+    <p class="hint">Etiqueta de 30 × 10 mm (3 cm × 1 cm), com o código de barras e os números. Cada barra tem 0,25 mm, um número exato de pontos da impressora térmica (2 pontos em 203 dpi, 3 em 300 dpi), para as barras saírem uniformes. O PDF tem uma etiqueta por página: na impressora, escolha a etiqueta de 30 × 10 mm e imprima em <b>tamanho real (100%)</b>, sem "ajustar à página".</p>
     <div class="labels">${sel.map(v => `<div class="lab" title="${esc(v.sku)}">${barcode(v.ean)}</div>`).join("")}</div>
     <div class="dlg-act"><button class="btn btn-dark" data-act="etq-pdf">Baixar PDF das etiquetas</button><button class="btn" data-act="copy-eans" data-list="${esc(sel.map(v => v.sku + "\t" + v.ean).join("\n"))}">Copiar lista de EANs</button><button class="btn" data-act="close">Fechar</button></div>`, true);
   A.etqSel = sel.map(v => v.ean);
@@ -970,10 +971,11 @@ async function etiquetasPDF(btn){
   const txt = btn.innerHTML; btn.disabled = true; btn.textContent = "Gerando PDF…";
   try{
     const jsPDF = await carregaJsPDF();
-    const doc = new jsPDF({ unit:"mm", format:[30, 20], orientation:"landscape" });
-    const MOD = 0.264, X0 = 11 * MOD, TOP = 1.4, H = 14.2, HG = 15.6;
+    // 30 × 10 mm. Módulo de 0,25 mm = 2 pontos exatos em 203 dpi (3 em 300 dpi): barras sem distorção na térmica
+    const W = 30, HP = 10, MOD = 0.25, X0 = (W - 95 * MOD) / 2, TOP = 0.7, H = 6.5, HG = 7.3;
+    const doc = new jsPDF({ unit:"mm", format:[W, HP], orientation:"landscape" });
     eans.forEach((ean, k) => {
-      if(k) doc.addPage([30, 20], "landscape");
+      if(k) doc.addPage([W, HP], "landscape");
       const d = ean.split("").map(Number), par = EP[d[0]];
       let bits = "101";
       for(let i = 1; i <= 6; i++) bits += (par[i-1] === "L" ? EL : EG)[d[i]];
@@ -986,8 +988,8 @@ async function etiquetasPDF(btn){
         doc.rect(X0 + i * MOD, TOP, (j - i) * MOD, guard ? HG : H, "F");
         i = j;
       }
-      doc.setFont("courier", "normal"); doc.setFontSize(6.2); doc.setTextColor(0, 0, 0);
-      const yT = TOP + H + 1.9;
+      doc.setFont("courier", "bold"); doc.setFontSize(5.4); doc.setTextColor(0, 0, 0);
+      const yT = TOP + H + 1.75;
       doc.text(ean[0], X0 - 0.4, yT, { align:"right" });
       doc.text(ean.slice(1, 7), X0 + 24 * MOD, yT, { align:"center", charSpace:0.35 });
       doc.text(ean.slice(7), X0 + 71 * MOD, yT, { align:"center", charSpace:0.35 });
