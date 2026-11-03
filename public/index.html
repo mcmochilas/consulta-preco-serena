@@ -1066,20 +1066,24 @@ async function etiquetasPDF(btn, teste){
   finally{ if(document.body.contains(btn)){ btn.disabled = false; btn.innerHTML = txt; } }
 }
 /* ---------- EAN de modelo: uma etiqueta para o modelo inteiro (ex.: Shell) ---------- */
-async function modalModelos(q = "", aviso = ""){
-  const { lista, faltam } = await api.modelosEan();
+async function modalModelos(q = "", aviso = "", recarrega = false){
+  if(recarrega || !A.modCache) A.modCache = await api.modelosEan();
+  const { lista, faltam } = A.modCache;
   const t = q.trim().toLowerCase(), vis = t ? lista.filter(x => (x.modelo + " " + x.linha + " " + x.ean).toLowerCase().includes(t)) : lista;
-  A.modVis = vis;
+  A.modVis = vis; A.modLista = lista; A.modQ = q;
+  const sel = A.modSel ||= new Set(), nSel = [...sel].filter(m => lista.some(x => x.modelo === m)).length;
+  const todosVis = vis.length && vis.every(x => sel.has(x.modelo));
   modal(`<h2>EANs de modelo</h2>
     <p class="hint" style="margin:0">Um código para cada modelo. No showroom, ao bipar o EAN do modelo o app abre a lista com todas as variações e o vendedor escolhe a cor e o tamanho. Os códigos começam com <span class="mono">29</span> (uso interno da loja) e não se repetem com os EANs dos produtos.</p>
     ${aviso ? `<div class="tag tag-ok" role="status" style="align-self:flex-start">${esc(aviso)}</div>` : ""}
     ${faltam ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px dashed #E8C7AA;border-radius:12px;background:#FFF8F0"><span><b>${faltam} modelo${faltam > 1 ? "s" : ""}</b> ainda sem EAN</span><button class="btn btn-dark btn-sm" data-act="modelos-gerar">Gerar EANs que faltam</button></div>` : ""}
     <div class="fld"><label for="modBusca">Buscar modelo ou marca</label><input class="inp" id="modBusca" value="${esc(q)}" placeholder="Ex.: Shell, Zen Design" autocomplete="off"></div>
     <div class="tbox" style="max-height:44vh;overflow:auto"><table class="t" style="min-width:0">
-      <thead><tr><th>Modelo</th><th>Marca</th><th class="r">Variações</th><th>EAN do modelo</th></tr></thead>
-      <tbody>${vis.map(x => `<tr><td><b>${esc(x.modelo)}</b></td><td>${esc(x.linha)}</td><td class="r">${x.n}</td><td class="mono">${esc(x.ean)}</td></tr>`).join("") || `<tr><td colspan="4" class="muted" style="padding:18px 12px">${lista.length ? "Nada encontrado." : "Nenhum EAN de modelo ainda. Toque em Gerar EANs que faltam."}</td></tr>`}</tbody>
+      <thead><tr><th style="width:36px"><input type="checkbox" data-act="mod-todos" ${todosVis ? "checked" : ""} ${vis.length ? "" : "disabled"} aria-label="Selecionar todos os modelos da lista" style="width:18px;height:18px;accent-color:var(--ink)"></th><th>Modelo</th><th>Marca</th><th class="r">Variações</th><th>EAN do modelo</th></tr></thead>
+      <tbody>${vis.map(x => `<tr class="${sel.has(x.modelo) ? "sel" : ""}" data-act="mod-sel" data-m="${esc(x.modelo)}" style="cursor:pointer"><td><input type="checkbox" ${sel.has(x.modelo) ? "checked" : ""} tabindex="-1" aria-label="Selecionar ${esc(x.modelo)}" style="width:18px;height:18px;accent-color:var(--ink);pointer-events:none"></td><td><b>${esc(x.modelo)}</b></td><td>${esc(x.linha)}</td><td class="r">${x.n}</td><td class="mono">${esc(x.ean)}</td></tr>`).join("") || `<tr><td colspan="5" class="muted" style="padding:18px 12px">${lista.length ? "Nada encontrado." : "Nenhum EAN de modelo ainda. Toque em Gerar EANs que faltam."}</td></tr>`}</tbody>
     </table></div>
-    <div class="dlg-act"><button class="btn btn-dark" data-act="modelos-etq" ${vis.length ? "" : "disabled"}>Imprimir etiquetas (${vis.length})</button><button class="btn" data-act="close">Fechar</button></div>`, true);
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px">${nSel ? `<b>${nSel} modelo${nSel > 1 ? "s" : ""} selecionado${nSel > 1 ? "s" : ""}</b><span class="muted">a seleção continua ao buscar outros modelos</span><button class="btn btn-sm" data-act="mod-limpar">Limpar seleção</button>` : `<span class="muted">Marque os modelos que quer imprimir. Pode buscar outros e ir somando à seleção.</span>`}</div>
+    <div class="dlg-act"><button class="btn btn-dark" data-act="modelos-etq" ${nSel || vis.length ? "" : "disabled"}>${nSel ? `Imprimir selecionados (${nSel})` : `Imprimir todos da lista (${vis.length})`}</button><button class="btn" data-act="close">Fechar</button></div>`, true);
   const b = $("#modBusca"); if(b){ b.oninput = () => { clearTimeout(A.modT); A.modT = setTimeout(async () => { const pos = b.selectionStart; await modalModelos(b.value); const n = $("#modBusca"); if(n){ n.focus(); n.setSelectionRange(pos, pos); } }, 250); }; if(q) { b.focus(); } }
 }
 async function modalVincular(ean){
@@ -1172,9 +1176,17 @@ document.addEventListener("click", async e => {
     case "ean-edit": A.editId = el.dataset.id; await renderAdmin(); { const i = document.querySelector("[data-ean-form] input"); if(i){ i.focus(); i.select(); } } break;
     case "ean-cancel": A.editId = null; renderAdmin(); break;
     case "modelo": await api.produtos(); modalModelo(el.dataset.id); break;
-    case "modelos-ean": modalModelos(); break;
-    case "modelos-gerar": { el.disabled = true; el.textContent = "Gerando…"; try{ const n = await api.gerarEansModelos(); await modalModelos(($("#modBusca") || {}).value || "", n + " EAN" + (n > 1 ? "s" : "") + " de modelo criado" + (n > 1 ? "s" : "")); }catch(x){ toast(x.message); el.disabled = false; } break; }
-    case "modelos-etq": { const it = (A.modVis || []).map(x => ({ sku:"Modelo " + x.modelo, ean:x.ean })); modalEtiquetas(it, "Etiquetas de modelo"); break; }
+    case "modelos-ean": modalModelos("", "", true); break;
+    case "modelos-gerar": { el.disabled = true; el.textContent = "Gerando…"; try{ const n = await api.gerarEansModelos(); await modalModelos(($("#modBusca") || {}).value || "", n + " EAN" + (n > 1 ? "s" : "") + " de modelo criado" + (n > 1 ? "s" : ""), true); }catch(x){ toast(x.message); el.disabled = false; } break; }
+    case "modelos-etq": { const sel = A.modSel || new Set(), base = sel.size ? (A.modLista || []).filter(x => sel.has(x.modelo)) : (A.modVis || []);
+      modalEtiquetas(base.map(x => ({ sku:"Modelo " + x.modelo, ean:x.ean })), "Etiquetas de modelo"); break; }
+    case "mod-sel": case "mod-todos": case "mod-limpar": {
+      const sel = A.modSel ||= new Set();
+      if(act === "mod-sel"){ const m = el.dataset.m; sel.has(m) ? sel.delete(m) : sel.add(m); }
+      if(act === "mod-todos"){ const vis = A.modVis || [], todos = vis.every(x => sel.has(x.modelo)); vis.forEach(x => todos ? sel.delete(x.modelo) : sel.add(x.modelo)); }
+      if(act === "mod-limpar") sel.clear();
+      const box = document.querySelector("#modal .tbox"), y = box ? box.scrollTop : 0;
+      await modalModelos(A.modQ || ""); const nb = document.querySelector("#modal .tbox"); if(nb) nb.scrollTop = y; break; }
     case "etiquetas": modalEtiquetas(); break;
     case "etq-pdf": etiquetasPDF(el); break;
     case "etq-teste": etiquetasPDF(el, true); break;
