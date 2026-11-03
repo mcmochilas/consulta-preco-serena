@@ -962,39 +962,54 @@ async function modalEtiquetas(){
   const sel = prods.filter(v => ids.includes(v.id) && v.ean);
   modal(`<h2>Etiquetas EAN · ${sel.length}</h2>
     <p class="hint">Etiqueta de 30 × 10 mm (3 cm × 1 cm), com o código de barras e os números. Cada barra tem 0,25 mm, um número exato de pontos da impressora térmica (2 pontos em 203 dpi, 3 em 300 dpi), para as barras saírem uniformes. O PDF tem uma etiqueta por página: na impressora, escolha a etiqueta de 30 × 10 mm e imprima em <b>tamanho real (100%)</b>, sem "ajustar à página".</p>
+    <div class="row2" style="margin:4px 0 2px">
+      <div class="fld"><label for="etqDpi">Resolução da impressora</label><select class="inp" id="etqDpi">${[[203,"203 dpi (8 pontos/mm) · mais comum"],[300,"300 dpi (12 pontos/mm)"]].map(([v,l]) => `<option value="${v}" ${ETQ().dpi === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="fld"><label for="etqRed">Afinar as barras (a térmica engrossa)</label><select class="inp" id="etqRed">${[[0,"Não afinar"],[1,"1 ponto · recomendado"],[2,"2 pontos · se ainda borrar"]].map(([v,l]) => `<option value="${v}" ${ETQ().red === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
+    <p class="hint" style="margin:0">Não sabe o ajuste? Baixe o <b>teste de espessura</b>: 3 etiquetas, uma com cada ajuste. Use o que o celular ler mais fácil.</p>
     <div class="labels">${sel.map(v => `<div class="lab" title="${esc(v.sku)}">${barcode(v.ean)}</div>`).join("")}</div>
-    <div class="dlg-act"><button class="btn btn-dark" data-act="etq-pdf">Baixar PDF das etiquetas</button><button class="btn" data-act="copy-eans" data-list="${esc(sel.map(v => v.sku + "\t" + v.ean).join("\n"))}">Copiar lista de EANs</button><button class="btn" data-act="close">Fechar</button></div>`, true);
+    <div class="dlg-act"><button class="btn btn-dark" data-act="etq-pdf">Baixar PDF das etiquetas</button><button class="btn" data-act="etq-teste">Teste de espessura</button><button class="btn" data-act="copy-eans" data-list="${esc(sel.map(v => v.sku + "\t" + v.ean).join("\n"))}">Copiar lista de EANs</button><button class="btn" data-act="close">Fechar</button></div>`, true);
   A.etqSel = sel.map(v => v.ean);
 }
-async function etiquetasPDF(btn){
+const ETQ = () => ({ dpi:203, red:1, ...store.get("cp-etq", {}) });
+// desenha uma etiqueta de 30 × 10 mm com tudo alinhado aos pontos da cabeça térmica:
+// módulo = 2 pontos (203 dpi) ou 3 pontos (300 dpi); cada barra perde "red" pontos à direita para compensar o borrão
+function desenhaEtiqueta(doc, ean, cfg){
+  const W = 30, HP = 10, dot = 25.4 / cfg.dpi, m = cfg.dpi >= 300 ? 3 : 2, red = Math.min(cfg.red, m - 1);
+  const x0 = Math.round((W / dot - 95 * m) / 2), top = Math.round(0.7 / dot), h = Math.round(6.5 / dot), hg = Math.round(7.3 / dot);
+  const d = ean.split("").map(Number), par = EP[d[0]];
+  let bits = "101";
+  for(let i = 1; i <= 6; i++) bits += (par[i-1] === "L" ? EL : EG)[d[i]];
+  bits += "01010"; for(let i = 7; i <= 12; i++) bits += ER[d[i]]; bits += "101";
+  doc.setFillColor(0, 0, 0);
+  for(let i = 0; i < 95; ){
+    if(bits[i] !== "1"){ i++; continue; }
+    let j = i; while(j < 95 && bits[j] === "1") j++;
+    const guard = i < 3 || (i >= 45 && i < 50) || i >= 92;
+    doc.rect((x0 + i * m) * dot, top * dot, ((j - i) * m - red) * dot, (guard ? hg : h) * dot, "F");
+    i = j;
+  }
+  doc.setFont("courier", "bold"); doc.setFontSize(5.4); doc.setTextColor(0, 0, 0);
+  const X0 = x0 * dot, M = m * dot, yT = (top + h) * dot + 1.75;
+  doc.text(ean[0], X0 - 0.4, yT, { align:"right" });
+  doc.text(ean.slice(1, 7), X0 + 24 * M, yT, { align:"center", charSpace:0.35 });
+  doc.text(ean.slice(7), X0 + 71 * M, yT, { align:"center", charSpace:0.35 });
+}
+async function etiquetasPDF(btn, teste){
   const eans = A.etqSel || []; if(!eans.length) return;
+  const cfg = { ...ETQ(), dpi: +($("#etqDpi") ? $("#etqDpi").value : ETQ().dpi), red: +($("#etqRed") ? $("#etqRed").value : ETQ().red) };
+  store.set("cp-etq", { dpi:cfg.dpi, red:cfg.red });
   const txt = btn.innerHTML; btn.disabled = true; btn.textContent = "Gerando PDF…";
   try{
     const jsPDF = await carregaJsPDF();
-    // 30 × 10 mm. Módulo de 0,25 mm = 2 pontos exatos em 203 dpi (3 em 300 dpi): barras sem distorção na térmica
-    const W = 30, HP = 10, MOD = 0.25, X0 = (W - 95 * MOD) / 2, TOP = 0.7, H = 6.5, HG = 7.3;
-    const doc = new jsPDF({ unit:"mm", format:[W, HP], orientation:"landscape" });
-    eans.forEach((ean, k) => {
-      if(k) doc.addPage([W, HP], "landscape");
-      const d = ean.split("").map(Number), par = EP[d[0]];
-      let bits = "101";
-      for(let i = 1; i <= 6; i++) bits += (par[i-1] === "L" ? EL : EG)[d[i]];
-      bits += "01010"; for(let i = 7; i <= 12; i++) bits += ER[d[i]]; bits += "101";
-      doc.setFillColor(0, 0, 0);
-      for(let i = 0; i < 95; ){
-        if(bits[i] !== "1"){ i++; continue; }
-        let j = i; while(j < 95 && bits[j] === "1") j++;
-        const guard = i < 3 || (i >= 45 && i < 50) || i >= 92;
-        doc.rect(X0 + i * MOD, TOP, (j - i) * MOD, guard ? HG : H, "F");
-        i = j;
-      }
-      doc.setFont("courier", "bold"); doc.setFontSize(5.4); doc.setTextColor(0, 0, 0);
-      const yT = TOP + H + 1.75;
-      doc.text(ean[0], X0 - 0.4, yT, { align:"right" });
-      doc.text(ean.slice(1, 7), X0 + 24 * MOD, yT, { align:"center", charSpace:0.35 });
-      doc.text(ean.slice(7), X0 + 71 * MOD, yT, { align:"center", charSpace:0.35 });
+    const doc = new jsPDF({ unit:"mm", format:[30, 10], orientation:"landscape" });
+    const paginas = teste ? [0, 1, 2].map(red => [eans[0], { ...cfg, red }]) : eans.map(e => [e, cfg]);
+    paginas.forEach(([ean, c], k) => {
+      if(k) doc.addPage([30, 10], "landscape");
+      desenhaEtiqueta(doc, ean, c);
+      if(teste){ doc.setFont("helvetica", "bold"); doc.setFontSize(4); doc.text(String(c.red), 29.3, 9.4, { align:"right" }); }
     });
-    await salvarArquivo(`etiquetas-ean-${eans.length}.pdf`, doc.output("blob"));
+    await salvarArquivo(teste ? `teste-espessura-${cfg.dpi}dpi.pdf` : `etiquetas-ean-${eans.length}.pdf`, doc.output("blob"));
   }catch(x){ if(!/cancel|declin|abort/i.test(String(x && (x.code || x.message)))) toast(x.message || "Não foi possível gerar o PDF."); }
   finally{ if(document.body.contains(btn)){ btn.disabled = false; btn.innerHTML = txt; } }
 }
@@ -1090,6 +1105,7 @@ document.addEventListener("click", async e => {
     case "modelo": await api.produtos(); modalModelo(el.dataset.id); break;
     case "etiquetas": modalEtiquetas(); break;
     case "etq-pdf": etiquetasPDF(el); break;
+    case "etq-teste": etiquetasPDF(el, true); break;
     case "copy-eans": toast(await copy(el.dataset.list) ? "Lista copiada" : "Não foi possível copiar aqui"); break;
     case "vincular": modalVincular(el.dataset.ean); break;
     case "novo-vend": modalNovoVend(); break;
