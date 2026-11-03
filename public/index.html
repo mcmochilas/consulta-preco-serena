@@ -113,6 +113,9 @@ button{cursor:pointer}
 .car-dots button{width:28px;height:34px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;padding:0}
 .car-dots span{display:block;height:8px;width:8px;border-radius:999px;background:rgba(23,23,26,.3);transition:width .2s}
 .car-dots button[aria-current="true"] span{width:20px;background:var(--ink)}
+.noimg.escolha{flex-direction:column;gap:8px;text-align:center;padding:24px;color:var(--ink2);font-size:14px;background:repeating-linear-gradient(135deg,#F7F4EF 0 14px,#F1ECE3 14px 28px)}
+.noimg.escolha b{font-family:var(--display);font-size:18px;color:var(--ink)}
+.escolha-txt{font-size:15px;font-weight:600;color:var(--accent)}
 .noimg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;font-weight:600}
 .ps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 16px;border-bottom:1px solid #ECEAE5}
 .ps .lbl{font-size:12px;color:var(--muted);font-weight:600}
@@ -642,8 +645,18 @@ async function buscar(code){
   const v = await api.buscarEAN(code);
   V.busy = false;
   bipe(!!v);
+  if(v && v.ehModelo) return abrirModelo(v);
   if(!v){ V.nf = { titulo:"Código não encontrado na Magazord", html:`EAN <span class="mono">${esc(code)}</span> não está ligado a nenhuma variação. A consulta ficou registrada para o administrador.` }; return renderVendedor(); }
   abrirVar(v);
+}
+// etiqueta do modelo: mostra todas as variações e pede para escolher uma
+async function abrirModelo(m){
+  const lista = await api.variacoesDe(m.modelo);
+  const marca = (lista.find(x => x.linha) || {}).linha || "";
+  V.cur = { id:"modelo:" + m.modelo, placeholder:true, modelo:m.modelo, prod:m.modelo, titulo:"Modelo " + m.modelo, linha:marca, cor:"", tam:"", sku:"—", ean:m.ean,
+    preco:{ varejo:0, promo:null }, total:0, fotos:[], imagens:0, hex:"#C9C6BE", ti:0 };
+  V.list = lista; V.slide = 0; V.filtro = "todas"; V.nf = null; V.screen = "produto";
+  renderVendedor(); window.scrollTo(0, 0);
 }
 async function abrirVar(v){
   V.cur = v; V.slide = 0; V.filtro = "todas"; V.nf = null; V.screen = "produto";
@@ -661,7 +674,8 @@ function precoDe(v, cfg){
 }
 
 function renderProduto(){
-  const cfg = api.config(), v = V.cur, pr = precoDe(v, cfg), st = stockInfo(v.total, cfg);
+  const cfg = api.config(), v = V.cur, pr = precoDe(v, cfg), st = stockInfo(v.total, cfg), ph = !!v.placeholder;
+  if(ph) V.filtro = "todas";
   let list = V.list.filter(x => cfg.semEstoque || x.total > 0 || x.id === v.id);
   if(V.filtro === "cor") list = list.filter(x => x.cor === v.cor);
   if(V.filtro === "tam") list = list.filter(x => x.tam === v.tam);
@@ -685,25 +699,27 @@ function renderProduto(){
             ${n > 1 ? `<button class="car-nav" style="left:8px" data-act="prev" aria-label="Imagem anterior">${ICON.prev}</button>
             <button class="car-nav" style="right:8px" data-act="next" aria-label="Próxima imagem">${ICON.next}</button>
             <div class="car-dots" id="dots">${Array.from({length:n}, (_, i) => `<button data-act="slide" data-i="${i}" aria-label="Ver imagem ${i+1}" aria-current="${i===0}"><span></span></button>`).join("")}</div>` : ""}`
+          : ph ? `<div class="noimg escolha"><span aria-hidden="true" style="font-size:30px">👇</span><b>Escolha uma variação para visualizar</b><span>Toque em uma cor ou tamanho na lista abaixo para ver as fotos, o preço e o estoque.</span></div>`
           : `<div class="noimg">Sem imagem cadastrada na Magazord</div>`}
         </div>
         <div class="ps">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span class="lbl">Preço</span>
             ${pr.de ? `<span class="strike">${brl(pr.de)}</span>` : ""}
-            <span class="big" style="white-space:nowrap">${brl(pr.valor)}</span>
+            <span class="big" style="white-space:nowrap">${ph ? "-" : brl(pr.valor)}</span>
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;text-align:right">
             <span class="lbl">Quantidade em estoque</span>
-            <span class="big" style="color:${st.c}">${v.total} <span style="font-size:16px;font-weight:600">un</span></span>
-            <span style="font-size:12px;color:var(--ink2)">${st.l}</span>
+            ${ph ? `<span class="big">-</span>` : `<span class="big" style="color:${st.c}">${v.total} <span style="font-size:16px;font-weight:600">un</span></span>
+            <span style="font-size:12px;color:var(--ink2)">${st.l}</span>`}
           </div>
         </div>
         <div class="info">
           <span class="eyebrow">${esc(v.linha)}</span>
           <h1>${esc(v.titulo)}</h1>
+          ${ph ? `<span class="escolha-txt">Escolha uma variação na lista abaixo.</span>` : ""}
           ${v.cor || v.tam ? `<span style="font-size:15px;color:var(--ink2);font-weight:500">${esc([v.cor, v.tam].filter(Boolean).join(" · "))}</span>` : ""}
-          <div class="codes"><span>SKU ${esc(v.sku)}</span><span>EAN ${esc(v.ean || "—")}</span></div>
+          <div class="codes">${ph ? `<span>EAN do modelo ${esc(v.ean)}</span>` : `<span>SKU ${esc(v.sku)}</span><span>EAN ${esc(v.ean || "—")}</span>`}</div>
         </div>
       </div>
       <div class="card" style="padding:16px 0 6px">
@@ -711,7 +727,7 @@ function renderProduto(){
           <h2 style="margin:0;font-family:var(--display);font-weight:600;font-size:17px">Variações${v.modelo ? ` <span class="muted" style="font-family:var(--ui);font-weight:600;font-size:13px">· modelo ${esc(v.modelo)}</span>` : ""}</h2>
           <span class="muted">${list.length} de ${V.list.length}</span>
         </div>
-        <div class="pills" style="padding:12px 16px 10px">
+        <div class="pills" style="padding:12px 16px 10px${ph ? ";display:none" : ""}">
           ${[["todas","Todas"],["cor","Mesma cor"],["tam","Mesmo tamanho"]].map(([k,l]) => `<button class="pill" data-act="filtro" data-f="${k}" aria-pressed="${V.filtro===k}">${l}</button>`).join("")}
         </div>
         <div class="vh">${th("cor","Cor")}${th("tam","Tam.")}${th("preco","Preço",true)}${th("estoque","Estoque",true)}</div>
@@ -727,7 +743,7 @@ function renderProduto(){
       ${ambRow()}
       <div style="display:flex;gap:10px;align-items:center">
         <div class="step"><button data-act="q-" aria-label="Diminuir quantidade">−</button><input id="qtd" type="number" min="1" inputmode="numeric" value="${V.qtd || 1}" aria-label="Quantidade"><button data-act="q+" aria-label="Aumentar quantidade">+</button></div>
-        <button class="btn btn-dark" data-act="add-pre" style="flex:1;height:46px;font-size:15px">Adicionar ao pré-pedido</button>
+        <button class="btn btn-dark" data-act="add-pre" style="flex:1;height:46px;font-size:15px${V.cur && V.cur.placeholder ? ";opacity:.45" : ""}" ${V.cur && V.cur.placeholder ? 'aria-disabled="true"' : ""}>Adicionar ao pré-pedido</button>
       </div>
       <button class="btn" data-act="voltar" style="height:44px;font-size:15px">${ICON.scan} Ler outro código</button>
     </div>
@@ -865,7 +881,7 @@ function admProd(prods){
   const nSel = Object.keys(A.sel).length;
   return `<header class="hdr">
       <div style="display:flex;flex-direction:column;gap:6px"><h1>Produtos e EANs</h1><span class="muted">Cada variação precisa de EAN para ser lida no showroom. Preço de varejo e estoque do CD vêm da Magazord.</span></div>
-      <button class="btn btn-dark" data-act="etiquetas">${nSel ? "Gerar etiquetas (" + nSel + ")" : "Gerar etiquetas EAN"}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="modelos-ean">EANs de modelo</button><button class="btn btn-dark" data-act="etiquetas">${nSel ? "Gerar etiquetas (" + nSel + ")" : "Gerar etiquetas EAN"}</button></div>
     </header>
     <div class="toolbar">
       <div class="fld" style="flex:1 1 260px"><label for="busca">Buscar por nome, modelo, SKU ou EAN</label><input class="inp" id="busca" value="${esc(A.busca)}" placeholder="Ex.: Barra Slim, BS-320, 7899…"></div>
@@ -913,7 +929,7 @@ function admVend(cons){
 
 function naoEncontrados(cons, resolv){
   const m = new Map();
-  cons.filter(c => !c.varId).forEach(c => { if(!m.has(c.ean)) m.set(c.ean, { ean:c.ean, at:c.at, user:c.user, n:0, ok:!!resolv[c.ean] }); m.get(c.ean).n++; });
+  cons.filter(c => !c.varId && !c.modelo).forEach(c => { if(!m.has(c.ean)) m.set(c.ean, { ean:c.ean, at:c.at, user:c.user, n:0, ok:!!resolv[c.ean] }); m.get(c.ean).n++; });
   return [...m.values()];
 }
 function admCons(cons, nfs, prods){
@@ -942,7 +958,7 @@ function admCons(cons, nfs, prods){
       <div style="overflow-x:auto"><table class="t">
         <thead><tr><th>Quando</th><th>Vendedor</th><th>EAN lido</th><th>Produto</th><th class="r">Preço mostrado</th><th class="r">Estoque mostrado</th></tr></thead>
         <tbody>${pL.items.map(c => { const v = c.varId && byId[c.varId];
-          return `<tr><td>${quando(c.at)}</td><td>${esc(users[c.user] || "—")}</td><td class="mono">${esc(c.ean)}</td><td style="${v ? "" : "color:var(--warn);font-weight:600"}">${v ? esc(nome(v)) : "Não encontrado"}</td><td class="r" style="font-weight:600">${v ? brl(c.preco) : "—"}</td><td class="r">${c.estoque == null ? "—" : c.estoque}</td></tr>`; }).join("")}</tbody>
+          return `<tr><td>${quando(c.at)}</td><td>${esc(users[c.user] || "—")}</td><td class="mono">${esc(c.ean)}</td><td style="${v || c.modelo ? "" : "color:var(--warn);font-weight:600"}">${v ? esc(nome(v)) : c.modelo ? `<span class="tag">EAN do modelo</span> ${esc(c.modelo)}` : "Não encontrado"}</td><td class="r" style="font-weight:600">${v ? brl(c.preco) : "—"}</td><td class="r">${c.estoque == null ? "—" : c.estoque}</td></tr>`; }).join("")}</tbody>
       </table></div>
       ${pL.html.replace('class="apag"', 'class="apag" style="padding:8px 20px 4px"')}
     </section>`;
@@ -955,12 +971,15 @@ function modal(html, wide){
 }
 const closeModal = () => $("#modal").innerHTML = "";
 
-async function modalEtiquetas(){
-  const prods = await api.produtos();
-  let ids = Object.keys(A.sel);
-  if(!ids.length) ids = prods.filter(v => v.ean).map(v => v.id);
-  const sel = prods.filter(v => ids.includes(v.id) && v.ean);
-  modal(`<h2>Etiquetas EAN · ${sel.length}</h2>
+async function modalEtiquetas(itens, titulo){
+  let sel = itens;
+  if(!sel){
+    const prods = await api.produtos();
+    let ids = Object.keys(A.sel);
+    if(!ids.length) ids = prods.filter(v => v.ean).map(v => v.id);
+    sel = prods.filter(v => ids.includes(v.id) && v.ean);
+  }
+  modal(`<h2>${esc(titulo || "Etiquetas EAN")} · ${sel.length}</h2>
     <p class="hint">Etiqueta de 30 × 10 mm (3 cm × 1 cm), com o código de barras e os números. Na térmica o PDF tem uma etiqueta por página; na folha A4 as etiquetas saem em grade, com margem de 10 mm e linhas claras para recortar. Imprima sempre em <b>tamanho real (100%)</b>, sem "ajustar à página".</p>
     <div class="fld" style="margin-top:4px"><label for="etqFmt">Onde imprimir</label><select class="inp" id="etqFmt">${[["termica","Impressora térmica · 1 etiqueta de 30 × 10 mm por página"],["a4",`Folha A4 · ${A4.cols} colunas × ${A4.rows} linhas = ${A4.cols * A4.rows} etiquetas por folha`]].map(([v,l]) => `<option value="${v}" ${ETQ().fmt === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="row2" style="margin:4px 0 2px">
@@ -1034,6 +1053,23 @@ async function etiquetasPDF(btn, teste){
     await salvarArquivo(nome, doc.output("blob"));
   }catch(x){ if(!/cancel|declin|abort/i.test(String(x && (x.code || x.message)))) toast(x.message || "Não foi possível gerar o PDF."); }
   finally{ if(document.body.contains(btn)){ btn.disabled = false; btn.innerHTML = txt; } }
+}
+/* ---------- EAN de modelo: uma etiqueta para o modelo inteiro (ex.: Shell) ---------- */
+async function modalModelos(q = "", aviso = ""){
+  const { lista, faltam } = await api.modelosEan();
+  const t = q.trim().toLowerCase(), vis = t ? lista.filter(x => (x.modelo + " " + x.linha + " " + x.ean).toLowerCase().includes(t)) : lista;
+  A.modVis = vis;
+  modal(`<h2>EANs de modelo</h2>
+    <p class="hint" style="margin:0">Um código para cada modelo. No showroom, ao bipar o EAN do modelo o app abre a lista com todas as variações e o vendedor escolhe a cor e o tamanho. Os códigos começam com <span class="mono">29</span> (uso interno da loja) e não se repetem com os EANs dos produtos.</p>
+    ${aviso ? `<div class="tag tag-ok" role="status" style="align-self:flex-start">${esc(aviso)}</div>` : ""}
+    ${faltam ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px dashed #E8C7AA;border-radius:12px;background:#FFF8F0"><span><b>${faltam} modelo${faltam > 1 ? "s" : ""}</b> ainda sem EAN</span><button class="btn btn-dark btn-sm" data-act="modelos-gerar">Gerar EANs que faltam</button></div>` : ""}
+    <div class="fld"><label for="modBusca">Buscar modelo ou marca</label><input class="inp" id="modBusca" value="${esc(q)}" placeholder="Ex.: Shell, Zen Design" autocomplete="off"></div>
+    <div class="tbox" style="max-height:44vh;overflow:auto"><table class="t" style="min-width:0">
+      <thead><tr><th>Modelo</th><th>Marca</th><th class="r">Variações</th><th>EAN do modelo</th></tr></thead>
+      <tbody>${vis.map(x => `<tr><td><b>${esc(x.modelo)}</b></td><td>${esc(x.linha)}</td><td class="r">${x.n}</td><td class="mono">${esc(x.ean)}</td></tr>`).join("") || `<tr><td colspan="4" class="muted" style="padding:18px 12px">${lista.length ? "Nada encontrado." : "Nenhum EAN de modelo ainda. Toque em Gerar EANs que faltam."}</td></tr>`}</tbody>
+    </table></div>
+    <div class="dlg-act"><button class="btn btn-dark" data-act="modelos-etq" ${vis.length ? "" : "disabled"}>Imprimir etiquetas (${vis.length})</button><button class="btn" data-act="close">Fechar</button></div>`, true);
+  const b = $("#modBusca"); if(b){ b.oninput = () => { clearTimeout(A.modT); A.modT = setTimeout(async () => { const pos = b.selectionStart; await modalModelos(b.value); const n = $("#modBusca"); if(n){ n.focus(); n.setSelectionRange(pos, pos); } }, 250); }; if(q) { b.focus(); } }
 }
 async function modalVincular(ean){
   const prods = await api.produtos();
@@ -1125,6 +1161,9 @@ document.addEventListener("click", async e => {
     case "ean-edit": A.editId = el.dataset.id; await renderAdmin(); { const i = document.querySelector("[data-ean-form] input"); if(i){ i.focus(); i.select(); } } break;
     case "ean-cancel": A.editId = null; renderAdmin(); break;
     case "modelo": await api.produtos(); modalModelo(el.dataset.id); break;
+    case "modelos-ean": modalModelos(); break;
+    case "modelos-gerar": { el.disabled = true; el.textContent = "Gerando…"; try{ const n = await api.gerarEansModelos(); await modalModelos(($("#modBusca") || {}).value || "", n + " EAN" + (n > 1 ? "s" : "") + " de modelo criado" + (n > 1 ? "s" : "")); }catch(x){ toast(x.message); el.disabled = false; } break; }
+    case "modelos-etq": { const it = (A.modVis || []).map(x => ({ sku:"Modelo " + x.modelo, ean:x.ean })); modalEtiquetas(it, "Etiquetas de modelo"); break; }
     case "etiquetas": modalEtiquetas(); break;
     case "etq-pdf": etiquetasPDF(el); break;
     case "etq-teste": etiquetasPDF(el, true); break;
@@ -1515,7 +1554,7 @@ document.addEventListener("click", async e => {
       case "cal-dia": { const t = +el.dataset.t; if(!CAL.ini || CAL.fim) { CAL.ini = t; CAL.fim = null; } else if(t < CAL.ini){ CAL.fim = CAL.ini; CAL.ini = t; } else CAL.fim = t; renderCal(); break; }
       case "cal-ok": V.per = { k:"custom", ini:CAL.ini, fim:CAL.fim || CAL.ini }; V.pgHoje = V.pgAnt = 1; closeModal(); renderPreList(); break;
       case "q-": case "q+": { const i = $("#qtd"); i.value = Math.max(1, (parseInt(i.value, 10) || 1) + (el.dataset.act === "q+" ? 1 : -1)); V.qtd = +i.value; break; }
-      case "add-pre": await adicionar(); break;
+      case "add-pre": if(V.cur && V.cur.placeholder){ toast("Escolha uma variação na lista primeiro"); break; } await adicionar(); break;
       case "pre-escolher": store.set(preKey(), id); closeModal(); if(V.pendente) await V.pendente(api.prepedido(id)); break;
       case "pre-escolher-novo": modalNovoPre(V.pendente); break;
       case "pq": { const p = api.prepedido(V.preId), it = p.itens.find(i => i.key === el.dataset.k);

@@ -89,7 +89,8 @@
     ];
     if(adm) jobs.push(
       sb.from("profiles").select("*").order("name").then(ok).then(rows => { C.perfis.clear(); rows.forEach(x => C.perfis.set(x.id, x)); }),
-      sb.from("consultas").select("at,user_id,ean,var_id,preco,estoque").order("at", { ascending:false }).limit(1000).then(ok).then(rows => { C.consultas = rows.map(x => ({ at:ms(x.at), user:x.user_id, ean:x.ean, varId:x.var_id, preco:x.preco == null ? null : Number(x.preco), estoque:x.estoque == null ? null : Number(x.estoque) })); }),
+      sb.from("modelos_ean").select("modelo,ean").then(ok).then(rows => { C.modEan = Object.fromEntries(rows.map(x => [x.ean, x.modelo])); }),
+      sb.from("consultas").select("at,user_id,ean,var_id,preco,estoque,modelo").order("at", { ascending:false }).limit(1000).then(ok).then(rows => { C.consultas = rows.map(x => ({ at:ms(x.at), user:x.user_id, ean:x.ean, varId:x.var_id, preco:x.preco == null ? null : Number(x.preco), estoque:x.estoque == null ? null : Number(x.estoque), modelo:x.modelo || null })); }),
       sb.from("sync_log").select("at,origem,itens,res").order("at", { ascending:false }).limit(60).then(ok).then(rows => { C.hist = rows.map(x => ({ at:ms(x.at), origem:x.origem, itens:x.itens, res:x.res })); }),
       // status da Magazord passa pela função do servidor (mais lenta): só quando a tela de integração pede
       ...(op.status === false ? [] : [fn("magazord", { action:"status" }).then(s => { C.mz = { ...C.mz, ...s }; }).catch(() => {})])
@@ -169,6 +170,11 @@
       let r = (ok(await sb.from("variacoes").select(VCOLS).in("ean", cands).eq("ativo", true).limit(1)) || [])[0];
       if(!r && C.aliases[ean]) r = ok(await sb.from("variacoes").select(VCOLS).eq("id", C.aliases[ean]).maybeSingle());
       if(!r){ const a = ok(await sb.from("aliases").select("var_id").eq("ean", ean).maybeSingle()); if(a) r = ok(await sb.from("variacoes").select(VCOLS).eq("id", a.var_id).maybeSingle()); }
+      // EAN de modelo (etiqueta do modelo inteiro): abre a lista de variações sem escolher nenhuma
+      if(!r){
+        const m = ok(await sb.from("modelos_ean").select("modelo,ean").in("ean", cands).maybeSingle());
+        if(m){ sb.from("consultas").insert({ user_id:C.me.id, ean, modelo:m.modelo }).then(() => {}); return { ehModelo:true, modelo:m.modelo, ean:m.ean }; }
+      }
       sb.from("consultas").insert({ user_id:C.me.id, ean, var_id:r ? r.id : null, preco:r ? r.preco : null, estoque:r ? Math.max(0, Number(r.estoque) || 0) : null }).then(() => {});
       if(!r) return null;
       return view(r, tamsDe(await irmaosDe(r)));
@@ -212,6 +218,17 @@
     },
     async vincular(ean, varId){ ok(await sb.from("aliases").upsert({ ean, var_id:varId }, { onConflict:"ean" })); C.aliases[ean] = varId; return true; },
     produtosCache(){ return C.prods; },
+    // EANs de modelo (um por modelo, prefixo 29 = uso interno da loja)
+    async modelosEan(){
+      const rows = ok(await sb.from("modelos_ean").select("modelo,ean").order("modelo"));
+      C.modEan = Object.fromEntries(rows.map(x => [x.ean, x.modelo]));
+      const prods = await this.produtos(), cont = {}, marca = {};
+      prods.forEach(v => { if(!v.modelo) return; cont[v.modelo] = (cont[v.modelo] || 0) + 1; marca[v.modelo] ||= v.linha; });
+      const tem = new Set(rows.map(x => x.modelo));
+      return { lista: rows.filter(x => cont[x.modelo]).map(x => ({ ...x, n:cont[x.modelo], linha:marca[x.modelo] || "" })), faltam: Object.keys(cont).filter(m => !tem.has(m)).length };
+    },
+    async gerarEansModelos(){ return ok(await sb.rpc("gerar_eans_modelos")); },
+    modeloDoEan(ean){ return (C.modEan || {})[ean] || null; },
     nomeLimpo,
     resolvidos(){ return clone(C.aliases); },
     consultas(){ return clone(C.consultas); },
