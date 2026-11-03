@@ -986,10 +986,11 @@ async function modalEtiquetas(itens, titulo){
       <div class="fld" id="etqDpiF" ${ETQ().fmt === "a4" ? "hidden" : ""}><label for="etqDpi">Resolução da impressora</label><select class="inp" id="etqDpi">${[[203,"203 dpi (8 pontos/mm) · mais comum"],[300,"300 dpi (12 pontos/mm)"]].map(([v,l]) => `<option value="${v}" ${ETQ().dpi === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="fld"><label for="etqRed">Afinar as barras (a térmica engrossa)</label><select class="inp" id="etqRed">${[[0,"Não afinar"],[1,"1 ponto · recomendado"],[2,"2 pontos · se ainda borrar"]].map(([v,l]) => `<option value="${v}" ${ETQ().red === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     </div>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-weight:600;margin:2px 0"><input type="checkbox" id="etqRot" ${ETQ().rot ? "checked" : ""} style="width:18px;height:18px;margin-top:1px;accent-color:var(--ink)"><span>Identificar cada etiqueta<span class="hint" style="display:block;font-weight:500;margin:2px 0 0">Imprime em cima do código o nome do modelo (ou o SKU, nas etiquetas de variação). As barras ficam um pouco mais baixas para caber nos 30 × 10 mm.</span></span></label>
     <p class="hint" style="margin:0">Não sabe o ajuste? Baixe o <b>teste de espessura</b>: 3 etiquetas, uma com cada ajuste. Use o que o celular ler mais fácil.</p>
     <div class="labels">${sel.map(v => `<div class="lab" title="${esc(v.sku)}">${barcode(v.ean)}</div>`).join("")}</div>
     <div class="dlg-act"><button class="btn btn-dark" data-act="etq-pdf">Baixar PDF das etiquetas</button><button class="btn" data-act="etq-teste">Teste de espessura</button><button class="btn" data-act="copy-eans" data-list="${esc(sel.map(v => v.sku + "\t" + v.ean).join("\n"))}">Copiar lista de EANs</button><button class="btn" data-act="close">Fechar</button></div>`, true);
-  A.etqSel = sel.map(v => v.ean);
+  A.etqSel = sel.map(v => ({ ean:v.ean, rot: v.rot || v.sku || "" }));
 }
 const ETQ = () => ({ dpi:203, red:1, fmt:"termica", ...store.get("cp-etq", {}) });
 // folha A4: margem de segurança de 10 mm (as impressoras não imprimem na borda) e 2 mm entre etiquetas para recortar
@@ -998,9 +999,18 @@ const A4 = (() => { const W = 210, H = 297, mg = 10, gx = 2, gy = 2, w = 30, h =
   return { W, H, w, h, gx, gy, cols, rows, x0:(W - (cols * w + (cols - 1) * gx)) / 2, y0:(H - (rows * h + (rows - 1) * gy)) / 2 }; })();
 // desenha uma etiqueta de 30 × 10 mm com tudo alinhado aos pontos da impressora:
 // módulo ≈ 0,25 mm em pontos inteiros (2 em 203 dpi, 3 em 300, 6 em 600); cada barra perde "red" pontos à direita para compensar o borrão
-function desenhaEtiqueta(doc, ean, cfg, ox = 0, oy = 0){
+function desenhaEtiqueta(doc, ean, cfg, ox = 0, oy = 0, rot = ""){
   const W = 30, dot = 25.4 / cfg.dpi, m = Math.max(2, Math.round(0.25 / dot)), red = Math.min(cfg.red, m - 1);
-  const x0 = Math.round((W / dot - 95 * m) / 2), top = Math.round(0.7 / dot), h = Math.round(6.5 / dot), hg = Math.round(7.3 / dot);
+  // com identificação: texto de 1,7 mm no topo e barras mais baixas (4,6 mm) para tudo caber em 10 mm
+  const comRot = !!(cfg.rot && rot);
+  const x0 = Math.round((W / dot - 95 * m) / 2), top = Math.round((comRot ? 2.55 : 0.7) / dot), h = Math.round((comRot ? 4.65 : 6.5) / dot), hg = Math.round((comRot ? 5.45 : 7.3) / dot);
+  if(comRot){
+    doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+    let fs = 6, t = String(rot).trim(); const max = 27.5;
+    doc.setFontSize(fs); while(doc.getTextWidth(t) > max && fs > 4.6){ fs -= 0.2; doc.setFontSize(fs); }
+    while(doc.getTextWidth(t) > max && t.length > 3) t = t.slice(0, -2).trimEnd() + "…";
+    doc.text(t, ox + W / 2, oy + 1.95, { align:"center" });
+  }
   const d = ean.split("").map(Number), par = EP[d[0]];
   let bits = "101";
   for(let i = 1; i <= 6; i++) bits += (par[i-1] === "L" ? EL : EG)[d[i]];
@@ -1020,14 +1030,14 @@ function desenhaEtiqueta(doc, ean, cfg, ox = 0, oy = 0){
   doc.text(ean.slice(7), X0 + 71 * M, yT, { align:"center", charSpace:0.35 });
 }
 async function etiquetasPDF(btn, teste){
-  const eans = A.etqSel || []; if(!eans.length) return;
+  const itens = A.etqSel || []; if(!itens.length) return;
   const v = id => $(id) ? $(id).value : null, base = ETQ();
-  const cfg = { fmt: v("#etqFmt") || base.fmt, dpi: +(v("#etqDpi") || base.dpi), red: +(v("#etqRed") ?? base.red) };
+  const cfg = { fmt: v("#etqFmt") || base.fmt, dpi: +(v("#etqDpi") || base.dpi), red: +(v("#etqRed") ?? base.red), rot: $("#etqRot") ? $("#etqRot").checked : !!base.rot };
   store.set("cp-etq", cfg);
   const txt = btn.innerHTML; btn.disabled = true; btn.textContent = "Gerando PDF…";
   try{
     const jsPDF = await carregaJsPDF();
-    const lista = teste ? [0, 1, 2].map(red => [eans[0], { ...cfg, red }]) : eans.map(e => [e, cfg]);
+    const lista = teste ? [0, 1, 2].map(red => [itens[0], { ...cfg, red }]) : itens.map(e => [e, cfg]);
     let doc;
     if(cfg.fmt === "a4"){
       // impressora comum: grade de 600 dpi; linhas de corte bem claras entre as etiquetas
@@ -1038,18 +1048,18 @@ async function etiquetasPDF(btn, teste){
         const col = n % A4.cols, lin = Math.floor(n / A4.cols);
         const x = A4.x0 + col * (A4.w + A4.gx), y = A4.y0 + lin * (A4.h + A4.gy);
         doc.setDrawColor(215, 215, 215); doc.setLineWidth(0.1); doc.rect(x, y, A4.w, A4.h, "S");
-        desenhaEtiqueta(doc, ean, { ...c, dpi:600 }, x, y);
+        desenhaEtiqueta(doc, ean.ean, { ...c, dpi:600 }, x, y, ean.rot);
         if(teste){ doc.setFont("helvetica", "bold"); doc.setFontSize(4); doc.text(String(c.red), x + 29.3, y + 9.4, { align:"right" }); }
       });
     } else {
       doc = new jsPDF({ unit:"mm", format:[30, 10], orientation:"landscape" });
       lista.forEach(([ean, c], k) => {
         if(k) doc.addPage([30, 10], "landscape");
-        desenhaEtiqueta(doc, ean, c);
+        desenhaEtiqueta(doc, ean.ean, c, 0, 0, ean.rot);
         if(teste){ doc.setFont("helvetica", "bold"); doc.setFontSize(4); doc.text(String(c.red), 29.3, 9.4, { align:"right" }); }
       });
     }
-    const nome = teste ? `teste-espessura-${cfg.fmt === "a4" ? "a4" : cfg.dpi + "dpi"}.pdf` : `etiquetas-ean-${eans.length}${cfg.fmt === "a4" ? "-a4" : ""}.pdf`;
+    const nome = teste ? `teste-espessura-${cfg.fmt === "a4" ? "a4" : cfg.dpi + "dpi"}.pdf` : `etiquetas-ean-${itens.length}${cfg.fmt === "a4" ? "-a4" : ""}.pdf`;
     await salvarArquivo(nome, doc.output("blob"));
   }catch(x){ if(!/cancel|declin|abort/i.test(String(x && (x.code || x.message)))) toast(x.message || "Não foi possível gerar o PDF."); }
   finally{ if(document.body.contains(btn)){ btn.disabled = false; btn.innerHTML = txt; } }
