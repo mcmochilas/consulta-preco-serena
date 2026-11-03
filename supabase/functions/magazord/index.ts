@@ -83,7 +83,7 @@ function atributo(o: any, re: RegExp) {
   });
   return val || String(pick(o, re, "string") ?? "");
 }
-const TAM = /^\s*\d+([.,]\d+)?\s*(mm|cm|m|pol)?\s*$|\d+\s*(mm|cm)\b/i;
+const TAM = /^\s*\d+([.,]\d+)?\s*(mm|cm|m|pol)?\s*$|\d+\s*(mm|cm)\b|^(pp|p|m|g|gg|mini|ponto)$/i;
 function mapDeriv(d: Obj, prod: Obj | null, base: string) {
   const codigo = String(d.codigo ?? d.id ?? "");
   const nomeCompleto = String(d.nomeCompleto ?? "").trim();
@@ -248,6 +248,8 @@ async function detalhar(limiteMs = 40e3, conc = 2, max = 120) {
     const r = await mz(`/v2/site/frontend/produto/1/${encodeURIComponent(v.id)}`);
     if (r.status === 429) { limitado = true; return; }
     const d = (r.body as any)?.data;
+    // a vitrine precisa devolver a mesma variação pedida; se vier outra, não grava nada dela
+    if (d && typeof d === "object" && d.codigo != null && String(d.codigo) !== String(v.id)) { falhas++; if (erros.length < 3) erros.push(`${v.id}: veio ${d.codigo}`); await sb.from("variacoes").update({ detalhe_at: new Date().toISOString() }).eq("id", v.id); return; }
     if (r.status >= 400 || !d || typeof d !== "object") { falhas++; if (erros.length < 3) erros.push(`${v.id}: ${r.status}`); await sb.from("variacoes").update({ detalhe_at: new Date().toISOString() }).eq("id", v.id); return; }
     const midias = (Array.isArray(d.midias) ? d.midias : []).filter((m: Obj) => m && m.arquivo_nome && (m.tipo_file ?? 1) === 1).sort((a: Obj, b: Obj) => (a.ordem ?? 0) - (b.ordem ?? 0));
     if (base === undefined && midias[0]) base = await baseImagem(c, midias[0]);
@@ -261,7 +263,8 @@ async function detalhar(limiteMs = 40e3, conc = 2, max = 120) {
       imagens: base ? midias.map((m: Obj) => base + String(m.path || "") + String(m.arquivo_nome)).slice(0, 12) : [],
       detalhe_at: new Date().toISOString(),
     };
-    if (d.titulo) patch.titulo = String(d.titulo);
+    // "nome" é o nome cadastrado do produto; "titulo" é o título de SEO do site (às vezes com erro de digitação)
+    if (d.nome || d.titulo) patch.titulo = String(d.nome || d.titulo);
     if (d.marca) patch.linha = String(d.marca).slice(0, 60);
     if (cor && !/^(único|unico)$/i.test(cor)) patch.cor = String(cor).slice(0, 60);
     if (tam && !/^(único|unico)$/i.test(tam)) patch.tamanho = String(tam).slice(0, 60);
