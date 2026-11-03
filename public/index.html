@@ -799,6 +799,7 @@ async function renderAdmin(){
       <div class="navfoot">
         <div class="navstat"><b><span class="dot" style="background:#7FB0F0"></span>Magazord ${api.config().api.ok ? "conectada" : "não configurada"}</b>${sync.last ? "Última sincronização " + rel(sync.last) : "Nenhuma sincronização ainda"}</div>
         <button class="navlink" data-act="to-vendedor">Abrir app do vendedor</button>
+        <button class="navlink" data-act="u-pin" data-id="${esc(S.me.id)}">Trocar meu PIN</button>
         <button class="navlink" data-act="logout">Sair</button>
       </div>
     </nav>
