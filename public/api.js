@@ -108,7 +108,7 @@
   async function entrou(user){
     const p = ok(await sb.from("profiles").select("*").eq("id", user.id).maybeSingle());
     if(!p || !p.active){ await sb.auth.signOut(); throw new Error(p ? "Acesso desativado. Fale com o administrador." : "Usuário sem cadastro no app."); }
-    C.me = { id:p.id, name:p.name, login:p.login, role:p.role, active:p.active };
+    C.me = { id:p.id, name:p.name, login:p.login, role:p.role, active:p.active, prefs:p.prefs || {} };
     await carregar(); tempoReal();
     fn("usuarios", { action:"touch", device:aparelho() }).catch(() => {});
   }
@@ -141,6 +141,9 @@
       return C.me;
     },
     me(){ return C.me ? clone(C.me) : null; },
+    // configurações do perfil (ex.: modo de leitura), guardadas no servidor para valer em qualquer aparelho
+    prefs(){ return (C.me && C.me.prefs) || {}; },
+    async salvarPrefs(p){ if(!C.me) return {}; C.me.prefs = { ...(C.me.prefs || {}), ...p }; const r = ok(await sb.rpc("salvar_prefs", { p })); if(r) C.me.prefs = r; return C.me.prefs; },
     async temAdmin(){ return (await fn("usuarios", { action:"status" })).hasAdmin; },
     async criarAdmin({ name, login, pin }){ await fn("usuarios", { action:"bootstrap", name, login, pin }); return this.login(login, pin); },
     async login(login, pin){

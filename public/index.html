@@ -63,6 +63,10 @@ button{cursor:pointer}
 .scan-btn.on .scan-frame{z-index:1;left:10%;right:10%;top:28%;bottom:30%}
 .scan-btn.on .scan-txt{z-index:2}
 .scan-btn.ok .scan-frame i{border-color:#7CD39A}
+.cfg-op{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;cursor:pointer}
+.cfg-op:has(input:checked){border-color:var(--ink);background:#F7F2E8}
+.cfg-op input{width:18px;height:18px;accent-color:var(--ink);flex:0 0 auto}
+.cfg-ic{width:36px;height:36px;border-radius:10px;background:#EDE6D9;display:grid;place-items:center;font-size:18px;color:var(--ink);flex:0 0 auto}
 .modo-lt{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:#0B2F40}
 .modo-lt button{height:40px;border:0;border-radius:10px;background:transparent;color:#B7CAD4;font:inherit;font-size:14px;font-weight:700}
 .modo-lt button[aria-checked="true"]{background:#F7F4EF;color:#0F3A4E}
@@ -442,14 +446,10 @@ function renderVendedor(){
   $("#app").innerHTML = `<div class="vd vd-dark">
     <div class="vtop">
       <div style="display:flex;align-items:center;gap:10px;min-width:0"><img src="${LOGO.escuro}" alt="Serena Puxadores" style="height:34px;width:auto;display:block"><small style="border-left:1px solid #3C6E86;padding-left:10px;line-height:1.25">Consulta de preço<br>${esc(S.me.name.split(" ")[0])}</small></div>
-      <div style="display:flex;gap:6px;align-items:center">${backAdmin}<button class="chip" data-act="pre-list" style="border:1px solid #3C6E86;background:transparent;color:#F7F4EF;height:36px">Pré-pedidos</button><button class="icon-btn" data-act="logout" aria-label="Sair" style="color:#F7F4EF">${ICON.out}</button></div>
+      <div style="display:flex;gap:6px;align-items:center">${backAdmin}<button class="chip" data-act="pre-list" style="border:1px solid #3C6E86;background:transparent;color:#F7F4EF;height:36px">Pré-pedidos</button><button class="icon-btn" data-act="config-perfil" aria-label="Configurações" title="Configurações" style="color:#F7F4EF"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button><button class="icon-btn" data-act="logout" aria-label="Sair" style="color:#F7F4EF">${ICON.out}</button></div>
     </div>
     <div style="padding:6px 16px 0;display:flex;flex-direction:column;gap:14px">
       ${activeStrip()}
-      <div class="modo-lt" role="radiogroup" aria-label="Como ler o código">
-        <button role="radio" aria-checked="${modoLeitura() === "camera"}" data-act="modo" data-m="camera">📷 Câmera</button>
-        <button role="radio" aria-checked="${modoLeitura() === "bt"}" data-act="modo" data-m="bt"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>Leitor Bluetooth</button>
-      </div>
       ${modoLeitura() === "bt" ? `<div class="bt-box" id="btBox" data-act="bt-foco" role="button" tabindex="-1" aria-label="Leitor Bluetooth pronto">
         <span class="bt-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></span>
         <b id="btTxt">Pronto para bipar</b>
@@ -458,7 +458,7 @@ function renderVendedor(){
         <video id="scanVideo" playsinline muted autoplay></video>
         <div class="scan-frame"><i></i><i></i><i></i><i></i><div class="scan-line"></div></div>
         <div class="scan-tools"><button type="button" data-act="cam-luz" id="camLuz" hidden aria-label="Lanterna">💡 Luz</button><button type="button" data-act="cam-foto" aria-label="Tirar foto da etiqueta">📷 Foto</button></div>
-        <span class="scan-txt" id="scanTxt">${CAM.stream ? "Aponte para o código de barras" : CAM.erro ? esc(CAM.erro) : "Toque para ligar a câmera"}<span class="scan-sub">Tem leitor Bluetooth? Escolha "Leitor Bluetooth" acima</span></span>
+        <span class="scan-txt" id="scanTxt">${CAM.stream ? "Aponte para o código de barras" : CAM.erro ? esc(CAM.erro) : "Toque para ligar a câmera"}<span class="scan-sub">Usa leitor Bluetooth? Troque em ⚙ Configurações</span></span>
       </div>`}
       <input type="file" id="camFile" accept="image/*" capture="environment" hidden>
       <form id="eanForm" style="display:flex;flex-direction:column;gap:6px;margin:0">
@@ -623,7 +623,27 @@ function bipe(ok){
 }
 
 /* ---------- modo de leitura: câmera ou leitor Bluetooth (fica salvo no aparelho) ---------- */
-const modoLeitura = () => store.get("cp-modo-leitura", "camera") === "bt" ? "bt" : "camera";
+// vem das configurações do perfil (servidor); enquanto não houver, usa o último modo deste aparelho
+const modoLeitura = () => ((api.prefs && api.prefs().leitura) || store.get("cp-modo-leitura", "camera")) === "bt" ? "bt" : "camera";
+function modalConfig(){
+  const m = modoLeitura();
+  const op = (v, t, d, ic) => `<label class="cfg-op"><input type="radio" name="leitura" value="${v}" ${m === v ? "checked" : ""}><span class="cfg-ic" aria-hidden="true">${ic}</span><span style="display:flex;flex-direction:column;gap:2px"><b>${t}</b><span class="hint" style="margin:0">${d}</span></span></label>`;
+  modal(`<h2>Configurações</h2>
+    <p class="hint" style="margin:0">Fica salvo no seu perfil (${esc(S.me.name.split(" ")[0])}) e vale em qualquer aparelho em que você entrar.</p>
+    <form id="fCfg" style="display:flex;flex-direction:column;gap:12px">
+      <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"><legend style="font-weight:700;font-size:14px;margin-bottom:6px">Como ler o código de barras</legend>
+        ${op("camera", "Câmera do celular", "A câmera fica ligada na tela de leitura e lê o código sozinha.", "📷")}
+        ${op("bt", "Leitor Bluetooth", "A câmera fica desligada. É só bipar, também direto na tela do produto.", `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>`)}
+      </fieldset>
+      <div class="dlg-act"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn btn-dark" type="submit">Salvar</button></div>
+    </form>`);
+  $("#fCfg").onsubmit = async e => { e.preventDefault();
+    const v = (new FormData(e.target)).get("leitura") === "bt" ? "bt" : "camera";
+    store.set("cp-modo-leitura", v);
+    try{ await api.salvarPrefs({ leitura:v }); }catch(x){ toast("Salvo neste aparelho. Não consegui salvar no perfil: " + x.message); }
+    if(v === "bt") desligarCamera(); else CAM.erro = "";
+    closeModal(); toast(v === "bt" ? "Leitura pelo leitor Bluetooth" : "Leitura pela câmera"); renderVendedor(); };
+}
 // o leitor Bluetooth "digita" o código rápido e manda Enter: junta as teclas mesmo sem campo em foco,
 // na tela de leitura e na tela do produto (já abre o próximo puxador sem voltar)
 const BT = { buf:"", t0:0, timer:0 };
@@ -1195,7 +1215,7 @@ document.addEventListener("click", async e => {
     case "to-admin": S.asVendedor = false; render(); break;
     case "to-vendedor": S.asVendedor = true; V.screen = "scanner"; render(); window.scrollTo(0,0); break;
     case "camera": if(!CAM.stream){ CAM.erro = ""; ligarCamera(); } break;
-    case "modo": store.set("cp-modo-leitura", el.dataset.m); if(el.dataset.m === "bt") desligarCamera(); else CAM.erro = ""; renderVendedor(); break;
+    case "config-perfil": modalConfig(); break;
     case "bt-foco": break;
     case "cam-foto": $("#camFile").click(); break;
     case "cam-luz": luzCamera(); break;
