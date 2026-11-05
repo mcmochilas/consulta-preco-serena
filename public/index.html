@@ -63,6 +63,14 @@ button{cursor:pointer}
 .scan-btn.on .scan-frame{z-index:1;left:10%;right:10%;top:28%;bottom:30%}
 .scan-btn.on .scan-txt{z-index:2}
 .scan-btn.ok .scan-frame i{border-color:#7CD39A}
+.modo-lt{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:#0B2F40}
+.modo-lt button{height:40px;border:0;border-radius:10px;background:transparent;color:#B7CAD4;font:inherit;font-size:14px;font-weight:700}
+.modo-lt button[aria-checked="true"]{background:#F7F4EF;color:#0F3A4E}
+.bt-box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;min-height:150px;padding:20px 18px;border-radius:22px;background:#134761;color:#B7CAD4;font-size:13px;border:2px dashed #3C6E86;cursor:default}
+.bt-box b{font-family:var(--display);font-size:18px;color:#F7F4EF}
+.bt-box .bt-ic{color:#FFD195}
+.bt-box.lendo{border-color:#FFD195}
+.bt-box.ok{border-color:#7CD39A}
 .scan-tools{position:absolute;z-index:3;top:10px;right:10px;display:flex;gap:8px}
 .scan-tools button{height:34px;border-radius:17px;border:0;background:rgba(0,0,0,.45);color:#F7F4EF;font:inherit;font-size:13px;font-weight:600;padding:0 12px}
 .scan-frame{position:absolute;left:16%;right:16%;top:22%;bottom:30%}
@@ -438,12 +446,20 @@ function renderVendedor(){
     </div>
     <div style="padding:6px 16px 0;display:flex;flex-direction:column;gap:14px">
       ${activeStrip()}
-      <div class="scan-btn${CAM.stream ? " on" : ""}" id="scanBox" data-act="camera" role="button" tabindex="0" aria-label="Leitor de código de barras pela câmera">
+      <div class="modo-lt" role="radiogroup" aria-label="Como ler o código">
+        <button role="radio" aria-checked="${modoLeitura() === "camera"}" data-act="modo" data-m="camera">📷 Câmera</button>
+        <button role="radio" aria-checked="${modoLeitura() === "bt"}" data-act="modo" data-m="bt"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px;margin-right:4px"><path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/></svg>Leitor Bluetooth</button>
+      </div>
+      ${modoLeitura() === "bt" ? `<div class="bt-box" id="btBox" data-act="bt-foco" role="button" tabindex="-1" aria-label="Leitor Bluetooth pronto">
+        <span class="bt-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></span>
+        <b id="btTxt">Pronto para bipar</b>
+        <span>Aponte o leitor para a etiqueta e aperte o gatilho. A câmera fica desligada.</span>
+      </div>` : `<div class="scan-btn${CAM.stream ? " on" : ""}" id="scanBox" data-act="camera" role="button" tabindex="0" aria-label="Leitor de código de barras pela câmera">
         <video id="scanVideo" playsinline muted autoplay></video>
         <div class="scan-frame"><i></i><i></i><i></i><i></i><div class="scan-line"></div></div>
         <div class="scan-tools"><button type="button" data-act="cam-luz" id="camLuz" hidden aria-label="Lanterna">💡 Luz</button><button type="button" data-act="cam-foto" aria-label="Tirar foto da etiqueta">📷 Foto</button></div>
-        <span class="scan-txt" id="scanTxt">${CAM.stream ? "Aponte para o código de barras" : CAM.erro ? esc(CAM.erro) : "Toque para ligar a câmera"}<span class="scan-sub">Leitor Bluetooth: só bipar, o código cai no campo abaixo</span></span>
-      </div>
+        <span class="scan-txt" id="scanTxt">${CAM.stream ? "Aponte para o código de barras" : CAM.erro ? esc(CAM.erro) : "Toque para ligar a câmera"}<span class="scan-sub">Tem leitor Bluetooth? Escolha "Leitor Bluetooth" acima</span></span>
+      </div>`}
       <input type="file" id="camFile" accept="image/*" capture="environment" hidden>
       <form id="eanForm" style="display:flex;flex-direction:column;gap:6px;margin:0">
         <label for="eanIn" style="font-size:12px;color:#B7CAD4;font-weight:600">Ou digite o EAN, SKU ou nome do puxador</label>
@@ -466,7 +482,7 @@ function renderVendedor(){
     </div>
   </div>`;
   const inp = $("#eanIn");
-  if(matchMedia("(pointer:fine)").matches) inp.focus();
+  if(matchMedia("(pointer:fine)").matches && modoLeitura() !== "bt") inp.focus();
   $("#eanForm").onsubmit = e => { e.preventDefault(); enviarBusca(inp.value); };
   if(V.q) mostraSug(V.sugs || [], V.q);
   $("#camFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) lerFoto(f); };
@@ -605,6 +621,31 @@ function bipe(ok){
     else { tom(420, 0, 0.14); tom(320, 0.18, 0.2); }
   }catch(e){}
 }
+
+/* ---------- modo de leitura: câmera ou leitor Bluetooth (fica salvo no aparelho) ---------- */
+const modoLeitura = () => store.get("cp-modo-leitura", "camera") === "bt" ? "bt" : "camera";
+// o leitor Bluetooth "digita" o código rápido e manda Enter: junta as teclas mesmo sem campo em foco,
+// na tela de leitura e na tela do produto (já abre o próximo puxador sem voltar)
+const BT = { buf:"", t0:0, timer:0 };
+document.addEventListener("keydown", e => {
+  if(modoLeitura() !== "bt" || !S.me || (S.me.role === "admin" && !S.asVendedor)) return;
+  if(!(V.screen === "scanner" || V.screen === "produto")) return;
+  if(document.querySelector("#modal .ov")) return;
+  const alvo = e.target, digitando = alvo && alvo.matches && alvo.matches("input,textarea,select") && alvo.id !== "eanIn";
+  if(digitando || e.ctrlKey || e.metaKey || e.altKey) return;
+  if(alvo && alvo.id === "eanIn") return; // no campo, o Enter já faz a busca
+  if(/^\d$/.test(e.key)){
+    const agora = Date.now(); if(agora - BT.t0 > 120) BT.buf = ""; BT.t0 = agora; BT.buf += e.key;
+    const b = $("#btBox"); if(b){ b.classList.add("lendo"); const t = $("#btTxt"); if(t) t.textContent = BT.buf; }
+    clearTimeout(BT.timer); BT.timer = setTimeout(() => { BT.buf = ""; const b2 = $("#btBox"); if(b2) b2.classList.remove("lendo"); const t2 = $("#btTxt"); if(t2) t2.textContent = "Pronto para bipar"; }, 600);
+    e.preventDefault(); return;
+  }
+  if((e.key === "Enter" || e.key === "Tab") && BT.buf.length >= 8){
+    const code = BT.buf; BT.buf = ""; clearTimeout(BT.timer); e.preventDefault();
+    if(V.screen === "produto"){ V.screen = "scanner"; }
+    buscar(code);
+  }
+});
 
 /* ---------- busca por nome ou SKU com sugestões enquanto digita ---------- */
 let sugT, sugN = 0;
@@ -1154,6 +1195,8 @@ document.addEventListener("click", async e => {
     case "to-admin": S.asVendedor = false; render(); break;
     case "to-vendedor": S.asVendedor = true; V.screen = "scanner"; render(); window.scrollTo(0,0); break;
     case "camera": if(!CAM.stream){ CAM.erro = ""; ligarCamera(); } break;
+    case "modo": store.set("cp-modo-leitura", el.dataset.m); if(el.dataset.m === "bt") desligarCamera(); else CAM.erro = ""; renderVendedor(); break;
+    case "bt-foco": break;
     case "cam-foto": $("#camFile").click(); break;
     case "cam-luz": luzCamera(); break;
     case "abrir": { const v = await api.variacao(el.dataset.id); if(v) abrirVar(v); break; }
